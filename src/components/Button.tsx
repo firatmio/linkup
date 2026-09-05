@@ -36,7 +36,8 @@ export function Button({
         "inline-flex h-[var(--lu-control-h)] items-center justify-center gap-2 rounded-lu-sm px-3",
         "text-[length:var(--lu-text-body)] font-normal",
         "transition-colors duration-[var(--lu-dur-fast)] ease-[var(--lu-ease)]",
-        "disabled:pointer-events-none disabled:text-fg-disabled disabled:opacity-60",
+        // WinUI'da devre dışı buton vurgu rengini korumaz, nötr dolguya döner.
+        "disabled:pointer-events-none disabled:border-transparent disabled:bg-selected disabled:text-fg-disabled disabled:shadow-none",
         variants[variant],
         className,
       )}
