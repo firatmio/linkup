@@ -28,6 +28,13 @@ use crate::pairing::{self, PairingManager};
 /// Bağlantı canlılığı QUIC'in kendi keep-alive'ına bırakılmıştır.
 const ONLINE_POLL_INTERVAL: Duration = Duration::from_secs(15);
 
+/// Bağlantıyı normalde yalnızca `device_id`si küçük olan taraf başlatır
+/// (aşağıdaki nota bakınız). Karşı taraf bu süre boyunca hâlâ çevrimdışıysa
+/// o da denemeye başlar: ulaşılabilirlik tek yönlü olabilir (bir taraftaki
+/// güvenlik duvarı gelen bağlantıyı engelliyor olabilir) ve bu durumda
+/// hiç bağlanamamak, kısa bir gecikmeden çok daha kötüdür.
+const INITIATE_FALLBACK_AFTER: Duration = Duration::from_secs(45);
+
 pub const EVENT_PRESENCE: &str = "devices:presence";
 
 /// Hangi cihazların o an bağlı olduğunu tutar.
@@ -63,6 +70,16 @@ impl Presence {
     pub fn online_count(&self) -> usize {
         self.online.lock().expect("presence kilidi").len()
     }
+}
+
+/// Bağlantıyı hangi tarafın başlatacağını belirler.
+///
+/// İki taraf da aynı anda bağlanırsa her biri diğerininkini "fazlalık" sayıp
+/// kapatır ve İKİ bağlantı birden düşer; ardından ikisi de yeniden dener ve
+/// döngü kilitlenir. Kural her iki tarafta da aynı sonucu vermeli: küçük
+/// kimlikli taraf başlatır.
+fn should_initiate(local: &[u8; 32], peer: &[u8; 32]) -> bool {
+    local < peer
 }
 
 pub struct ConnectionManager {
@@ -122,17 +139,42 @@ impl ConnectionManager {
 
     async fn supervise_loop(self: Arc<Self>, device_id: [u8; 32]) {
         let mut backoff = Backoff::new();
+        let mut offline_since = std::time::Instant::now();
+
+        // Yalnızca kimliği küçük olan taraf bağlantıyı başlatır.
+        //
+        // İki taraf da aynı anda bağlanırsa her biri diğerininkini "fazlalık"
+        // sayıp kapatıyor ve İKİ bağlantı birden düşüyordu; ardından ikisi de
+        // yeniden deniyor ve döngü kilitleniyordu. Kimliğe göre deterministik
+        // bir başlatan seçmek bu simetriyi kırar.
+        let we_initiate = should_initiate(&self.endpoint.device_id(), &device_id);
 
         loop {
-            // Cihaz unutulduysa gözetmen de sona ermeli.
-            if !self.still_trusted(&device_id) {
-                tracing::debug!("cihaz artık güvenilir değil, gözetmen sona eriyor");
-                return;
+            match self.still_trusted(&device_id) {
+                Some(true) => {}
+                Some(false) => {
+                    tracing::debug!("cihaz artık güvenilir değil, gözetmen sona eriyor");
+                    return;
+                }
+                // Veritabanı geçici olarak erişilemiyor. Bunu "güvenilir değil"
+                // saymak gözetmeni kalıcı olarak sonlandırırdı; cihaz bir daha
+                // hiç bağlanamazdı.
+                None => {
+                    tokio::time::sleep(ONLINE_POLL_INTERVAL).await;
+                    continue;
+                }
             }
 
             if self.presence.is_online(&device_id) {
+                offline_since = std::time::Instant::now();
                 // Karşı taraf bize bağlanmış olabilir; ikinci bir bağlantı açma.
                 tokio::time::sleep(ONLINE_POLL_INTERVAL).await;
+                continue;
+            }
+
+            if !we_initiate && offline_since.elapsed() < INITIATE_FALLBACK_AFTER {
+                // Karşı tarafın bağlanmasını bekle.
+                tokio::time::sleep(Duration::from_secs(2)).await;
                 continue;
             }
 
@@ -190,12 +232,10 @@ impl ConnectionManager {
             .and_then(|addr| addr.parse().ok())
     }
 
-    fn still_trusted(&self, device_id: &[u8; 32]) -> bool {
-        self.db
-            .get()
-            .ok()
-            .and_then(|conn| devices::is_trusted(&conn, device_id).ok())
-            .unwrap_or(false)
+    /// `None`: veritabanına ulaşılamadı — cevap bilinmiyor, "hayır" değil.
+    fn still_trusted(&self, device_id: &[u8; 32]) -> Option<bool> {
+        let conn = self.db.get().ok()?;
+        devices::is_trusted(&conn, device_id).ok()
     }
 
     /// Bir cihaza mesaj gönderir. Cihaz bağlı değilse `false` döner.
@@ -452,6 +492,28 @@ mod tests {
             presence.claim([1; 32]),
             "kopan bağlantı yeniden kurulabilmeli"
         );
+    }
+
+    /// Gerileme testi: bağlantıyı TAM OLARAK bir taraf başlatmalı.
+    ///
+    /// İlk uygulamada iki taraf da başlatıyordu; açtıkları bağlantılar
+    /// birbirini kapatıyor ve bağlantı sürekli düşüp kalkıyordu.
+    #[test]
+    fn baglantiyi_tam_olarak_bir_taraf_baslatir() {
+        let a = [1u8; 32];
+        let b = [2u8; 32];
+
+        // İki cihaz da aynı kuralı uygular ve zıt sonuca varır.
+        assert!(should_initiate(&a, &b));
+        assert!(!should_initiate(&b, &a));
+        assert_ne!(should_initiate(&a, &b), should_initiate(&b, &a));
+
+        // Yalnızca son bayt farklı olsa bile karar netleşmeli.
+        let mut c = [7u8; 32];
+        let mut d = [7u8; 32];
+        c[31] = 1;
+        d[31] = 2;
+        assert_ne!(should_initiate(&c, &d), should_initiate(&d, &c));
     }
 
     #[test]
