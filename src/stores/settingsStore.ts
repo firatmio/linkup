@@ -18,6 +18,7 @@ interface SettingsState {
   load: () => Promise<void>;
   setCloseToTray: (enabled: boolean) => Promise<void>;
   setAutostart: (enabled: boolean) => Promise<void>;
+  setGlobalShortcut: (accelerator: string) => Promise<void>;
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
@@ -49,6 +50,18 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       // İşletim sistemi kaydı ile ayar birlikte yazılır; kayıt başarısız
       // olursa ayar da yazılmaz ve anahtar eski hâlinde kalır.
       const settings = await api.setAutostart(enabled);
+      set({ settings, saving: false });
+    } catch (err) {
+      set({ error: translateError(err), saving: false });
+    }
+  },
+
+  setGlobalShortcut: async (accelerator) => {
+    set({ saving: true, error: null });
+    try {
+      // Kayıt başarısızsa backend ayarı YAZMIYOR; hata mesajı kullanıcıya
+      // kombinasyonun alınmış olduğunu söylüyor ve eski kısayol duruyor.
+      const settings = await api.setGlobalShortcut(accelerator);
       set({ settings, saving: false });
     } catch (err) {
       set({ error: translateError(err), saving: false });

@@ -53,6 +53,7 @@ tauri-winrt-notification = "0.8.1"
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "gif", "webp", "bmp"] }
 tauri-plugin-single-instance = "2.4.4"
 tauri-plugin-autostart = "2.5.1"
+tauri-plugin-global-shortcut = "2.3.2"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

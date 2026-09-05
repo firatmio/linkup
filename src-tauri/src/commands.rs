@@ -112,6 +112,39 @@ pub fn set_autostart(
     settings::load(&conn)
 }
 
+/// Global kısayolu değiştirir (PLAN.md §2.11).
+///
+/// Kayıt başarısız olursa (kombinasyon başka bir uygulamada) ayar YAZILMAZ:
+/// kullanıcının ayarlarda gördüğü kısayol, gerçekten çalışan kısayol olmalı.
+#[tauri::command]
+pub fn set_global_shortcut(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    accelerator: String,
+) -> AppResult<Settings> {
+    crate::shortcut::register(&app, &accelerator)?;
+
+    let conn = state.db.get().map_err(pool_error)?;
+    settings::set(&conn, "globalShortcut", accelerator.trim())?;
+    settings::load(&conn)
+}
+
+/// Hızlı gönder penceresinin ihtiyacı: çevrimiçi güvenilir cihazlar.
+#[tauri::command]
+pub fn quick_send_devices(state: State<'_, AppState>) -> AppResult<Vec<TrustedDeviceDto>> {
+    let devices = trusted_devices(state);
+    Ok(devices.into_iter().filter(|device| device.online).collect())
+}
+
+/// Hızlı gönder penceresini kapatır.
+#[tauri::command]
+pub fn close_quick_send(app: tauri::AppHandle) {
+    use tauri::Manager;
+    if let Some(window) = app.get_webview_window(crate::shortcut::QUICK_WINDOW) {
+        let _ = window.close();
+    }
+}
+
 /// Ağda görünen, henüz eşleşmemiş cihazlar (PLAN.md §3.2 "Bulunanlar").
 #[tauri::command]
 pub fn discovered_devices(state: State<'_, AppState>) -> Vec<DiscoveredDeviceDto> {

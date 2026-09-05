@@ -5,6 +5,7 @@ import { Dashboard } from "./features/dashboard/Dashboard";
 import { ChatsPage } from "./features/chat/ChatsPage";
 import { IncomingFilesPage } from "./features/transfer/IncomingFilesPage";
 import { SettingsPage } from "./features/settings/SettingsPage";
+import { QuickSendWindow } from "./features/quick/QuickSendWindow";
 import { initTheme, useUiStore } from "./stores/uiStore";
 import { useAppStore } from "./stores/appStore";
 import { useSettingsStore } from "./stores/settingsStore";
@@ -47,6 +48,13 @@ export default function App() {
   const loadTransfers = useTransferStore((s) => s.load);
   useEffect(() => void loadTransfers(), [loadTransfers]);
   useEffect(() => subscribeToTransfers(), []);
+
+  // Hızlı gönder penceresi aynı bundle'ı yükler ama uygulamanın kabuğunu
+  // KULLANMAZ: kenar çubuğu, keşif abonelikleri ve store'lar orada gereksiz
+  // iş olurdu. Router'dan önce ayrılıyor.
+  if (window.location.hash.startsWith("#/quick-send")) {
+    return <QuickSendWindow />;
+  }
 
   return (
     // Masaüstü uygulaması dosya protokolünden servis edildiği için HashRouter.

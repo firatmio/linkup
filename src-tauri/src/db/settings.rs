@@ -29,6 +29,8 @@ const DEFAULTS: &[(&str, &str)] = &[
     // "erişilemez" olmak demektir.
     ("closeToTray", "1"),
     ("autostart", "0"),
+    // Boş = kısayol yok. Varsayılanın tek kaynağı burası.
+    ("globalShortcut", "CmdOrCtrl+Shift+L"),
 ];
 
 /// Frontend'e giden ayar anlık görüntüsü.
@@ -44,6 +46,7 @@ pub struct Settings {
     pub speed_limit_bytes: u64,
     pub close_to_tray: bool,
     pub autostart: bool,
+    pub global_shortcut: String,
 }
 
 pub fn is_known_key(key: &str) -> bool {
@@ -114,6 +117,7 @@ pub fn load(conn: &Connection) -> AppResult<Settings> {
         speed_limit_bytes: parse_or_default(conn, "speedLimitBytes")?,
         close_to_tray: get(conn, "closeToTray")? == "1",
         autostart: get(conn, "autostart")? == "1",
+        global_shortcut: get(conn, "globalShortcut")?,
     })
 }
 

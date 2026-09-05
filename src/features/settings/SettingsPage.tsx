@@ -9,6 +9,7 @@ import {
   KeyRound,
   PanelsTopLeft,
   Power,
+  Keyboard,
 } from "lucide-react";
 import { t } from "../../i18n";
 import { Card, PageHeader, SectionTitle, SettingRow } from "../../components/Surface";
@@ -19,6 +20,7 @@ import { Switch } from "../../components/Switch";
 import { useUiStore, type ThemePreference } from "../../stores/uiStore";
 import { useAppStore } from "../../stores/appStore";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { ShortcutField } from "./ShortcutField";
 import { api } from "../../lib/tauri";
 
 const themeOptions: readonly { value: ThemePreference; label: string }[] = [
@@ -38,6 +40,7 @@ export function SettingsPage() {
   const settingsError = useSettingsStore((s) => s.error);
   const setCloseToTray = useSettingsStore((s) => s.setCloseToTray);
   const setAutostart = useSettingsStore((s) => s.setAutostart);
+  const setGlobalShortcut = useSettingsStore((s) => s.setGlobalShortcut);
 
   const info = useAppStore((s) => s.info);
   const identity = useAppStore((s) => s.identity);
@@ -104,6 +107,18 @@ export function SettingsPage() {
                   onChange={(enabled) => void setAutostart(enabled)}
                   label={t("settings.autostart")}
                   disabled={!settings || savingSettings}
+                />
+              }
+            />
+            <SettingRow
+              icon={<Keyboard size={18} />}
+              title={t("settings.shortcut")}
+              description={t("settings.shortcut.desc")}
+              control={
+                <ShortcutField
+                  value={settings?.globalShortcut ?? ""}
+                  disabled={!settings || savingSettings}
+                  onChange={(accelerator) => void setGlobalShortcut(accelerator)}
                 />
               }
             />

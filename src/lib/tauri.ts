@@ -46,6 +46,8 @@ export interface Settings {
   /** Kapatma düğmesi pencereyi tepsiye küçültür. */
   closeToTray: boolean;
   autostart: boolean;
+  /** Global kısayol; boş ise kısayol yok. */
+  globalShortcut: string;
 }
 
 /**
@@ -55,7 +57,7 @@ export interface Settings {
  * ve kendi komutu var (`setAutostart`). Düz `setSetting` ile yazılabilseydi,
  * ayar açık görünürken kayıt hiç oluşmayabilirdi.
  */
-export type SettingKey = Exclude<keyof Settings, "autostart">;
+export type SettingKey = Exclude<keyof Settings, "autostart" | "globalShortcut">;
 
 /** Cihazın nasıl bulunduğu (PLAN.md §2.4). */
 export type DiscoverySource = "mdns" | "manual";
@@ -276,6 +278,10 @@ export const api = {
   getSettings: () => invoke<Settings>("get_settings"),
   /** Ayarı yazar ve güncel anlık görüntüyü döndürür. */
   setAutostart: (enabled: boolean) => invoke<Settings>("set_autostart", { enabled }),
+  setGlobalShortcut: (accelerator: string) =>
+    invoke<Settings>("set_global_shortcut", { accelerator }),
+  quickSendDevices: () => invoke<TrustedDevice[]>("quick_send_devices"),
+  closeQuickSend: () => invoke<void>("close_quick_send"),
   setSetting: (key: SettingKey, value: string) =>
     invoke<Settings>("set_setting", { key, value }),
   discoveredDevices: () => invoke<DiscoveredDevice[]>("discovered_devices"),

@@ -10,6 +10,7 @@ mod network;
 mod notifications;
 mod pairing;
 mod paths;
+mod shortcut;
 mod state;
 mod transfer;
 mod tray;
@@ -61,6 +62,7 @@ pub fn run() {
     }
 
     builder
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
@@ -144,6 +146,16 @@ pub fn run() {
                 std::sync::Arc::clone(&connections),
             );
 
+            // Kısayol, ayarlar okunabildikten SONRA kaydedilir; başarısız
+            // olursa uygulama yine açılır, kullanıcı ayarlarda görür.
+            if let Ok(conn) = db.get() {
+                if let Ok(loaded) = db::settings::load(&conn) {
+                    if let Err(err) = shortcut::register(app.handle(), &loaded.global_shortcut) {
+                        tracing::warn!(error = %err, "global kısayol kaydedilemedi");
+                    }
+                }
+            }
+
             app.manage(AppState {
                 paths,
                 db,
@@ -183,6 +195,9 @@ pub fn run() {
             commands::reveal_transfer_file,
             commands::set_setting,
             commands::set_autostart,
+            commands::set_global_shortcut,
+            commands::quick_send_devices,
+            commands::close_quick_send,
             commands::open_log_dir
         ])
         .run(tauri::generate_context!())
