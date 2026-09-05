@@ -1,8 +1,14 @@
 #!/usr/bin/env node
 /**
- * Ayrılmış olarak başlatılan geliştirme süreçlerini kapatır: Vite sunucusu ve
- * ikincil LinkUp instance'ları. `dev-vite.mjs` ve `dev-second.mjs` süreçleri
- * bilerek kabuktan bağımsız başlattığı için Ctrl+C ile kapanmazlar.
+ * Çalışan tüm geliştirme süreçlerini kapatır: Vite sunucusu, birincil LinkUp
+ * instance'ı ve ikincil instance'lar. `dev-vite.mjs` ve `dev-second.mjs`
+ * süreçleri bilerek kabuktan bağımsız başlattığı için Ctrl+C ile kapanmazlar.
+ *
+ * Birincil instance'ı da kapatmak ŞART: Windows çalışan bir exe'nin üzerine
+ * yazdırmaz. Açık kalan bir `linkup.exe`, bir sonraki `bun run dev:a`
+ * derlemesini "Erişim engellendi (os error 5)" ile düşürür ve uygulama
+ * sessizce ESKİ ikiliyle çalışmaya devam eder — değişikliğin uygulanmadığını
+ * fark etmek zor.
  */
 
 import { execSync } from "node:child_process";
@@ -27,9 +33,12 @@ const viteStopped = isWindows
     )
   : run("pkill -f 'vite'");
 
+// Hem `linkup` hem `linkup-b`/`linkup-c`.
 const instancesStopped = isWindows
-  ? run('powershell -NoProfile -Command "Get-Process linkup-* -ErrorAction SilentlyContinue | Stop-Process -Force"')
-  : run("pkill -f 'linkup-'");
+  ? run(
+      'powershell -NoProfile -Command "Get-Process linkup, linkup-* -ErrorAction SilentlyContinue | Stop-Process -Force"',
+    )
+  : run("pkill -f 'linkup'");
 
 console.log(`Vite: ${viteStopped ? "durduruldu" : "çalışmıyordu"}`);
-console.log(`İkincil instance'lar: ${instancesStopped ? "durduruldu" : "çalışmıyordu"}`);
+console.log(`LinkUp instance'ları: ${instancesStopped ? "durduruldu" : "çalışmıyordu"}`);
