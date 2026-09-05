@@ -1,0 +1,108 @@
+@import "tailwindcss";
+@import "./styles/tokens.css";
+
+/*
+ * Token'ları Tailwind'e bağlar; böylece `bg-layer`, `text-secondary`,
+ * `rounded-lu-md` gibi yardımcı sınıflar token'larla aynı kaynaktan beslenir.
+ */
+@theme inline {
+  --font-sans: var(--lu-font-sans);
+  --font-display: var(--lu-font-display);
+  --font-mono: var(--lu-font-mono);
+
+  --color-base: var(--lu-bg-base);
+  --color-layer: var(--lu-bg-layer);
+  --color-layer-alt: var(--lu-bg-layer-alt);
+  --color-sidebar: var(--lu-bg-sidebar);
+
+  --color-hover: var(--lu-fill-subtle-hover);
+  --color-press: var(--lu-fill-subtle-press);
+  --color-selected: var(--lu-fill-selected);
+
+  --color-stroke: var(--lu-stroke);
+  --color-stroke-strong: var(--lu-stroke-strong);
+  --color-divider: var(--lu-stroke-divider);
+
+  --color-fg: var(--lu-text);
+  --color-fg-secondary: var(--lu-text-secondary);
+  --color-fg-tertiary: var(--lu-text-tertiary);
+  --color-fg-disabled: var(--lu-text-disabled);
+  --color-on-accent: var(--lu-text-on-accent);
+
+  --color-accent: var(--lu-accent);
+  --color-accent-hover: var(--lu-accent-hover);
+  --color-accent-press: var(--lu-accent-press);
+  --color-accent-subtle: var(--lu-accent-subtle);
+
+  --color-success: var(--lu-success);
+  --color-warning: var(--lu-warning);
+  --color-danger: var(--lu-danger);
+  --color-offline: var(--lu-offline);
+
+  --radius-lu-sm: var(--lu-radius-sm);
+  --radius-lu-md: var(--lu-radius-md);
+  --radius-lu-lg: var(--lu-radius-lg);
+
+  --shadow-card: var(--lu-shadow-card);
+  --shadow-flyout: var(--lu-shadow-flyout);
+}
+
+@layer base {
+  * {
+    border-color: var(--lu-stroke);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--lu-bg-base);
+    color: var(--lu-text);
+    font-family: var(--lu-font-sans);
+    font-size: var(--lu-text-body);
+    line-height: var(--lu-leading-normal);
+    -webkit-font-smoothing: antialiased;
+
+    /* Masaüstü uygulaması hissi: metin seçimi ve sürükleme varsayılan kapalı,
+       yalnızca içerik alanlarında açılır. */
+    user-select: none;
+    cursor: default;
+    overflow: hidden;
+  }
+
+  /* Fluent odak halkası */
+  :focus-visible {
+    outline: 2px solid var(--lu-text);
+    outline-offset: 1px;
+    border-radius: var(--lu-radius-sm);
+  }
+
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--lu-text-tertiary);
+    border: 4px solid transparent;
+    background-clip: content-box;
+    border-radius: var(--lu-radius-full);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--lu-text-secondary);
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer utilities {
+  /* Metnin seçilebilir olması gereken yerler (mesaj gövdesi, yollar, kodlar). */
+  .lu-selectable {
+    user-select: text;
+    cursor: auto;
+  }
+}
