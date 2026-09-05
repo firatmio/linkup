@@ -18,6 +18,34 @@ function keyName(event: KeyboardEvent | React.KeyboardEvent): string | null {
 }
 
 /**
+ * Hızlandırıcıyı okunabilir tuş adlarına böler.
+ *
+ * `CmdOrCtrl` platforma göre çözülür: kullanıcıya Tauri'nin iç gösterimini
+ * değil, klavyesinde yazan tuşu göstermek gerekir.
+ */
+function keyCaps(accelerator: string): string[] {
+  const isMac = navigator.platform.toLowerCase().includes("mac");
+  return accelerator.split("+").map((part) => {
+    switch (part) {
+      case "CmdOrCtrl":
+      case "CommandOrControl":
+        return isMac ? "⌘" : "Ctrl";
+      case "Cmd":
+      case "Command":
+        return "⌘";
+      case "Control":
+        return "Ctrl";
+      case "Alt":
+        return isMac ? "⌥" : "Alt";
+      case "Shift":
+        return isMac ? "⇧" : "Shift";
+      default:
+        return part;
+    }
+  });
+}
+
+/**
  * Kısayol yakalama alanı.
  *
  * Kombinasyon serbest metinle yazılmıyor: kullanıcının "Ctrl + Shift + L"
@@ -69,17 +97,30 @@ export function ShortcutField({
         onBlur={() => setRecording(false)}
         onKeyDown={recording ? capture : undefined}
         className={cn(
-          "h-[var(--lu-control-h)] min-w-40 rounded-lu-sm border px-3 font-mono",
+          "flex h-[var(--lu-control-h)] min-w-44 items-center justify-center gap-1 rounded-lu-sm border px-3",
           "text-[length:var(--lu-text-caption)]",
           "disabled:pointer-events-none disabled:text-fg-disabled",
           recording
             ? "border-accent bg-layer-alt text-accent"
-            : "border-stroke-strong bg-layer-alt text-fg",
+            : "border-stroke-strong bg-layer-alt text-fg hover:border-accent",
         )}
       >
-        {recording
-          ? t("settings.shortcut.recording")
-          : (value || t("settings.shortcut.empty"))}
+        {recording ? (
+          t("settings.shortcut.recording")
+        ) : value ? (
+          // Tuş başına bir kapak: "CmdOrCtrl+Shift+L" tek parça bir dize
+          // olarak okunmuyordu, klavyede aranacak şey üç ayrı tuş.
+          keyCaps(value).map((cap, index) => (
+            <span key={`${cap}-${index}`} className="flex items-center gap-1">
+              {index > 0 ? <span className="text-fg-tertiary">+</span> : null}
+              <kbd className="rounded-[3px] border border-stroke-strong bg-layer px-1.5 py-0.5 font-sans text-[length:var(--lu-text-caption)] leading-none shadow-[inset_0_-1px_0_var(--lu-stroke-strong)]">
+                {cap}
+              </kbd>
+            </span>
+          ))
+        ) : (
+          <span className="text-fg-tertiary">{t("settings.shortcut.empty")}</span>
+        )}
       </button>
       {value ? (
         <Button variant="subtle" disabled={disabled} onClick={() => onChange("")}>

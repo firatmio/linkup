@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { cn } from "../lib/cn";
 import { t, type TranslationKey } from "../i18n";
 import { DiscoveredDevices } from "../features/devices/DiscoveredDevices";
+import { UpdateStatus } from "../features/updates/UpdateStatus";
 
 interface NavItem {
   to: string;
@@ -72,6 +73,11 @@ export function AppSidebar() {
         ))}
       </ul>
 
+      {/* Güncelleme satırı bulunan cihazların hemen üstünde: ikisi de
+          "arka planda olan bitenler" bölgesi ve alt kenara yaslı duruyor. */}
+      <div className="mt-auto">
+        <UpdateStatus />
+      </div>
       <DiscoveredDevices />
     </nav>
   );

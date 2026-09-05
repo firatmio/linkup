@@ -1,0 +1,7 @@
+- Sohbette görsel önizleme ve tam ekran görüntüleyici
+- Aktarımlar artık sohbet akışında kendi baloncuğunda görünüyor
+- Gelen Dosyalar'da arama, tür filtresi ve dosya bilgi kartı
+- Sistem tepsisi, tepsiye küçülerek kapanma ve Windows açılışında başlatma
+- Global kısayolla hızlı gönder penceresi (seçili metni veya dosyayı yollar)
+- Özel başlık çubukları
+- Bildirimler artık birikip tek bildirimde toplanıyor

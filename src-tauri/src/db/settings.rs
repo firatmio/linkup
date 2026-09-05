@@ -29,6 +29,10 @@ const DEFAULTS: &[(&str, &str)] = &[
     // "erişilemez" olmak demektir.
     ("closeToTray", "1"),
     ("autostart", "0"),
+    // Kurulan sürümün notları. Güncelleme UYGULANMADAN önce yazılır ve
+    // yeniden başlatmadan sonra "yenilikler" penceresinde gösterilip
+    // temizlenir. JSON: {"version": "...", "notes": "..."}
+    ("pendingReleaseNotes", ""),
     // Boş = kısayol yok. Varsayılanın tek kaynağı burası.
     ("globalShortcut", "CmdOrCtrl+Shift+L"),
     // Kısayola basıldığında öndeki uygulamanın SEÇİMİNİ yakala (§2.9).

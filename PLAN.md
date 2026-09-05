@@ -416,6 +416,10 @@ Eşleşmemiş cihazlardan dosya **hiçbir modda** kabul edilmez.
 ### 2.15 Dağıtım
 
 - **Otomatik güncelleme:** `tauri-plugin-updater`. Protokolü olan bir P2P uygulamada sürüm dağılımı kritiktir — eski istemciler ağda kalırsa `capabilities` / `protocol_version` yükü büyür.
+  - **Uygulama durumu (Faz 8):** Kaynak GitHub Releases; `latest.json` yayının varlığı olarak duruyor. Kontrol açılışta bir kez yapılıyor ve güncelleme bulunursa arka planda İNDİRİLİYOR — kullanıcıya "güncelleme var" deyip sonra beklettirmek yerine, yeniden başlat dediğinde hazır olsun. Durum kenar çubuğunda, bulunan cihazların üstünde; yalnızca söyleyecek bir şey varken görünüyor.
+  - **Yenilikler penceresi:** Sürüm notları kurulum UYGULANMADAN ÖNCE ayarlara yazılıyor (kurulumdan sonra bu süreç sonlanmış oluyor, yazacak kimse kalmıyor) ve yeniden başlatmadan sonraki ilk açılışta gösterilip temizleniyor. Kayıtlı sürüm çalışan sürümle uyuşmuyorsa (kurulum yarıda kaldı) kayıt sessizce siliniyor.
+  - **Sürüm çıkarma:** `bun run release` — imzalı paketi üretir, `latest.json` yazar ve `gh` ile yayın oluşturur. Elle yapıldığında imza/sürüm/paket üçlüsünden biri kolayca kayıyor ve hata ancak kullanıcıların güncellemesi sessizce başarısız olduğunda fark ediliyor.
+  - ⚠ **Açık koşul:** Depo PRIVATE olduğu sürece güncelleyici dosyaları indiremez; GitHub özel depolarda yayın varlıklarını kimlik doğrulaması olmadan sunmaz. Otomatik güncelleme depo public olduğunda çalışır.
 - **Windows:** NSIS installer + firewall kuralı ekleme. Kod imzalama sertifikası yoksa SmartScreen uyarısı çıkacaktır — bilinen durum, README'de belirtilir.
 - **macOS:** notarization gerekir (aksi halde Gatekeeper engeller).
 - **Linux:** AppImage + .deb.
@@ -700,6 +704,9 @@ Kayıtsız bir AppUserModelID ile toast göndermek hata döndürmez; Windows bil
 
 **K13 — Bildirimler olay anında değil, kısa bir gecikmeden sonra gösterilir.**
 Bir toast Windows'a teslim edildikten sonra geri alınamıyor (`tauri-winrt-notification` toast `tag`'ini ve bildirim geçmişini dışa açmıyor), dolayısıyla "gönderirken odakta mıydı?" sorusu yanlış soruydu: art arda gelen beş mesajın toast'ları kullanıcı uygulamaya döndükten sonra bile sırayla düşüyordu. Doğru soru "gösterme ANINDA odakta mı?" — bu da gösterimi geciktirmeyi gerektiriyor. Gecikme aynı zamanda biriktirmeyi bedavaya getiriyor: o pencerede gelen olaylar tek bildirimde toplanıyor. Bedeli, bildirimin ~1,5 sn geç çıkması; kullanıcının fark etmediği, buna karşılık bildirim yağmurunu tamamen ortadan kaldıran bir takas. Alternatif olan `windows` crate'ine inip toast geçmişini elle yönetmek reddedildi: aynı sonucu platforma özgü çok daha fazla kodla verirdi.
+
+**K14 — Güncelleme imzalama anahtarı depoda değil, ama açık anahtar yapılandırmada.**
+`tauri-plugin-updater` her paketi minisign ile imzalatır ve istemci imzayı gömülü açık anahtarla doğrular. Bu, güncelleme kanalının tek güvenlik sınırı: HTTPS yalnızca aktarımı korur, "bu paketi gerçekten biz mi ürettik" sorusunu imza yanıtlar. Özel anahtar `.tauri/*.key` altında ve gitignore'da — ele geçiren biri imzalı sahte "güncelleme" üretip tüm kurulumlarda kod çalıştırabilir. Kaybedilmesi de geri dönüşsüz: mevcut kurulumlar bir daha güncelleme alamaz, çünkü yeni anahtarla imzalanan paketleri doğrulayamazlar. Anahtarın ayrı yedeği zorunlu.
 
 **K9 — Uzak CI servisi yok; doğrulama pre-push hook'u ile yerelde.**
 Uzak koşucunun (GitHub Actions vb.) üç değeri var: commit öncesi unutulanı yakalamak, temiz oda/tekrarlanabilirlik, çapraz platform doğrulama. Tek geliştirici, tek makine ve Windows-öncelikli bir uygulamada ikincisi ve üçüncüsü henüz spekülatif; birincisi ise `.githooks/pre-push` ile bedava çözülüyor. Docker'lı bir yerel CI da değerlendirildi ve elendi: Linux'u doğrular ama asıl riskin bulunduğu Windows'a özgü kodu (keyring backend'i, rezerve dosya adları, MAX_PATH — §2.6, §2.13.1) test edemez.

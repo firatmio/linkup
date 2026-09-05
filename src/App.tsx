@@ -9,6 +9,8 @@ import { QuickSendWindow } from "./features/quick/QuickSendWindow";
 import { initTheme, useUiStore } from "./stores/uiStore";
 import { useAppStore } from "./stores/appStore";
 import { useSettingsStore } from "./stores/settingsStore";
+import { useUpdateStore } from "./stores/updateStore";
+import { ReleaseNotesDialog } from "./features/updates/ReleaseNotesDialog";
 import { subscribeToDiscovery, useDeviceStore } from "./stores/deviceStore";
 import { subscribeToPairing, usePairingStore } from "./stores/pairingStore";
 import { subscribeToChat } from "./stores/chatStore";
@@ -32,6 +34,12 @@ export default function App() {
 
   const loadSettings = useSettingsStore((s) => s.load);
   useEffect(() => void loadSettings(), [loadSettings]);
+
+  // Güncelleme kontrolü açılışta bir kez. Periyodik kontrol eklenmedi:
+  // uygulama günlerce açık kalabiliyor ama güncelleme yeniden başlatma
+  // gerektirdiği için sık sık sormanın faydası yok.
+  const checkUpdate = useUpdateStore((s) => s.check);
+  useEffect(() => void checkUpdate(), [checkUpdate]);
 
   // Keşif: önce mevcut liste çekilir, sonra değişiklikler olayla akar.
   const loadDevices = useDeviceStore((s) => s.load);
@@ -60,6 +68,7 @@ export default function App() {
     // Masaüstü uygulaması dosya protokolünden servis edildiği için HashRouter.
     <HashRouter>
       <NotificationRouting />
+      <ReleaseNotesDialog />
       <AppShell>
         <Routes>
           <Route path="/" element={<Dashboard />} />

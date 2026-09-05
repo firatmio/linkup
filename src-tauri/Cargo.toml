@@ -55,6 +55,8 @@ tauri-plugin-single-instance = "2.4.4"
 tauri-plugin-autostart = "2.5.1"
 tauri-plugin-global-shortcut = "2.3.2"
 tauri-plugin-clipboard-manager = "2.3.3"
+tauri-plugin-updater = "2.11.0"
+tauri-plugin-process = "2.3.1"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

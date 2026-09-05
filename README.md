@@ -43,6 +43,23 @@ Loopback throughput (512 MiB, release): **263 MiB/s ≈ 2203 Mbit/s** — hedef
 cd src-tauri && cargo test --release -- --ignored --nocapture throughput
 ```
 
+## Sürüm çıkarma
+
+```bash
+bun run release 0.2.0
+```
+
+İmzalı kurulum paketini üretir, `latest.json` yazar ve `gh` ile GitHub yayını
+oluşturur. `RELEASE_NOTES.md` içeriği hem yayında hem de kullanıcının
+güncelleme sonrası gördüğü "Yenilikler" penceresinde görünür.
+
+İmzalama anahtarı `.tauri/linkup-updater.key` — **gitignore'da ve yedeği ayrı
+tutulmalı.** Ele geçirilirse imzalı sahte güncelleme üretilebilir; kaybedilirse
+mevcut kurulumlar bir daha güncelleme alamaz.
+
+> Depo **private** olduğu sürece otomatik güncelleme çalışmaz: GitHub özel
+> depolarda yayın varlıklarını kimlik doğrulaması olmadan sunmuyor.
+
 ## Gereksinimler
 
 - [Bun](https://bun.sh) 1.3+

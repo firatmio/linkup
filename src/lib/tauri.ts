@@ -50,6 +50,8 @@ export interface Settings {
   globalShortcut: string;
   /** Kısayolda öndeki uygulamanın seçimini yakala. */
   quickSendReadSelection: boolean;
+  /** Kurulan sürümün notları; JSON, boş ise gösterilecek bir şey yok. */
+  pendingReleaseNotes: string;
 }
 
 /**

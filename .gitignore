@@ -29,3 +29,8 @@ src-tauri/gen/schemas
 .VSCodeCounter
 # Araç dosyaları (Serena MCP)
 .serena/
+
+# Updater imzalama anahtarı. ASLA commit edilmez: bu anahtarı ele geçiren biri
+# imzalı "güncelleme" üretip tüm kurulumlara kod çalıştırabilir. Kaybedilirse
+# de mevcut kurulumlar bir daha güncelleme alamaz — yedeğini ayrı tut.
+.tauri/*.key
