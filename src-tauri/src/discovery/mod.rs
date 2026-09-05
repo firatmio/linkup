@@ -30,8 +30,6 @@ const TXT_VERSION: &str = "v";
 /// Frontend'e yayınlanan olay adı.
 pub const DISCOVERY_EVENT: &str = "discovery:changed";
 
-const SWEEP_INTERVAL: Duration = Duration::from_secs(30);
-
 /// Elle ekleme sırasında el sıkışmanın tamamlanması için üst sınır.
 /// Yanlış girilmiş bir adres kullanıcıyı belirsiz süre bekletmemeli.
 const MANUAL_PROBE_TIMEOUT: Duration = Duration::from_secs(8);
@@ -123,8 +121,6 @@ impl DiscoveryService {
             }
         };
 
-        Self::spawn_sweeper(app, Arc::clone(&registry));
-
         Self {
             registry,
             endpoint,
@@ -181,10 +177,18 @@ impl DiscoveryService {
                     ServiceEvent::ServiceResolved(info) => {
                         handle_resolved(&registry, &info, device_id)
                     }
+                    // Kayıtların ömrü tamamen mdns-sd'ye ait: önbelleği dolan
+                    // veya veda paketi gönderen servis burada bildirilir.
+                    // Kendi zaman aşımımızı eklemek, tazeleme olayı gelmediği
+                    // için cihazları kalıcı olarak siliyordu.
                     ServiceEvent::ServiceRemoved(_, full_name) => {
                         let instance = full_name.split('.').next().unwrap_or_default().to_string();
                         let mut registry = registry.lock().expect("kayıt defteri kilidi");
-                        registry.remove_by_instance(&instance)
+                        let removed = registry.remove_by_instance(&instance);
+                        if removed {
+                            tracing::info!(instance, "cihaz ağdan kayboldu");
+                        }
+                        removed
                     }
                     _ => false,
                 };
@@ -197,21 +201,6 @@ impl DiscoveryService {
         });
 
         Ok(daemon)
-    }
-
-    fn spawn_sweeper(app: AppHandle, registry: Arc<Mutex<Registry>>) {
-        tauri::async_runtime::spawn(async move {
-            loop {
-                tokio::time::sleep(SWEEP_INTERVAL).await;
-                let changed = {
-                    let mut registry = registry.lock().expect("kayıt defteri kilidi");
-                    registry.sweep_expired(Instant::now())
-                };
-                if changed {
-                    emit(&app, &registry);
-                }
-            }
-        });
     }
 
     /// Bağlantı denetleyicisi, güvenilir cihazın güncel adresini buradan alır.

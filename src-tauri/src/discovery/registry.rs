@@ -5,14 +5,9 @@
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use serde::Serialize;
-
-/// mDNS ilanı bu süre boyunca yenilenmezse cihaz listeden düşer.
-/// Yayıncı düzgün kapanırsa zaten `ServiceRemoved` gelir; bu, çöken veya
-/// ağdan kopan cihazlar için güvenlik ağıdır.
-const MDNS_TTL: Duration = Duration::from_secs(90);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -99,18 +94,6 @@ impl Registry {
         }
     }
 
-    /// Süresi dolan mDNS kayıtlarını temizler. Elle eklenenler süresizdir:
-    /// kullanıcının bilerek girdiği bir adres, cihaz o an kapalı diye
-    /// listeden kaybolmamalı.
-    pub fn sweep_expired(&mut self, now: Instant) -> bool {
-        let before = self.devices.len();
-        self.devices.retain(|_, device| {
-            device.source != DiscoverySource::Mdns
-                || now.duration_since(device.last_seen) < MDNS_TTL
-        });
-        self.devices.len() != before
-    }
-
     pub fn get(&self, device_id: &[u8; 32]) -> Option<&DiscoveredDevice> {
         self.devices.get(device_id)
     }
@@ -131,6 +114,7 @@ impl Registry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
 
     fn device(id: u8, name: &str, source: DiscoverySource) -> DiscoveredDevice {
         DiscoveredDevice {
@@ -171,42 +155,26 @@ mod tests {
         assert_eq!(names, ["Ali", "Bora", "Cem"]);
     }
 
+    /// Gerileme testi: kayıtlar kendiliğinden kaybolmamalı.
+    ///
+    /// İlk uygulamada kayıt defterinin kendi 90 sn'lik TTL'i vardı. mdns-sd
+    /// değişmeyen bir servis için `ServiceResolved`ı tekrar yayınlamadığından
+    /// `last_seen` hiç tazelenmiyor ve cihazlar iki dakika sonra listeden
+    /// KALICI olarak siliniyordu. Ömür yönetimi artık tamamen mdns-sd'ye ait:
+    /// kayıt yalnızca `ServiceRemoved` geldiğinde veya kullanıcı sildiğinde düşer.
     #[test]
-    fn suresi_dolan_mdns_kaydi_dusar() {
+    fn kayit_kendiliginden_kaybolmaz() {
         let mut registry = Registry::new();
-        let mut stale = device(1, "Kayıp", DiscoverySource::Mdns);
-        stale.last_seen = Instant::now() - MDNS_TTL - Duration::from_secs(1);
-        registry.upsert(stale);
-        registry.upsert(device(2, "Canlı", DiscoverySource::Mdns));
+        let mut old = device(1, "Eski", DiscoverySource::Mdns);
+        old.last_seen = Instant::now() - Duration::from_secs(60 * 60);
+        registry.upsert(old);
 
-        assert!(registry.sweep_expired(Instant::now()));
-        assert_eq!(registry.len(), 1);
-        assert!(registry.get(&[2; 32]).is_some());
-    }
+        assert_eq!(registry.len(), 1, "zamanla kendiliğinden silinmemeli");
+        assert!(registry.get(&[1; 32]).is_some());
 
-    /// Kullanıcının elle girdiği adres, cihaz o an kapalı diye kaybolmamalı.
-    #[test]
-    fn elle_eklenen_cihaz_suresiz_kalir() {
-        let mut registry = Registry::new();
-        let mut manual = device(1, "Elle", DiscoverySource::Manual);
-        manual.last_seen = Instant::now() - MDNS_TTL * 10;
-        registry.upsert(manual);
-
-        assert!(!registry.sweep_expired(Instant::now()));
-        assert_eq!(registry.len(), 1);
-    }
-
-    #[test]
-    fn yenilenen_ilan_suresini_uzatir() {
-        let mut registry = Registry::new();
-        let mut aging = device(1, "A", DiscoverySource::Mdns);
-        aging.last_seen = Instant::now() - MDNS_TTL - Duration::from_secs(1);
-        registry.upsert(aging);
-
-        // Aynı içerikle yeni ilan: değişiklik yok ama son görülme tazelenmeli.
-        assert!(!registry.upsert(device(1, "A", DiscoverySource::Mdns)));
-        assert!(!registry.sweep_expired(Instant::now()));
-        assert_eq!(registry.len(), 1);
+        // Yalnızca açık bir kaldırma kaydı düşürür.
+        assert!(registry.remove(&[1; 32]));
+        assert_eq!(registry.len(), 0);
     }
 
     /// Gerçek bir mDNS ilanı böyle görünüyor: LAN adresi, loopback,

@@ -192,6 +192,8 @@ Uyumsuz sürümde bağlantı `IncompatibleVersion` ile kapatılır ve kullanıc�
 - Ayarlar → "Cihaz Ekle" → IP + port girişi → doğrudan QUIC bağlantısı → pairing akışı normal şekilde işler.
 - Eşleşmiş cihazların son bilinen IP'si DB'de tutulur; mDNS başarısız olsa bile son IP denenir.
 
+**Kayıt ömrü (Faz 4'te düzeltildi):** Keşfedilen cihazların ömrü tamamen `mdns-sd`'ye aittir; kayıt yalnızca `ServiceRemoved` geldiğinde veya kullanıcı sildiğinde düşer. İlk uygulamada kendi 90 saniyelik TTL'imiz vardı ve bu, kütüphanenin önbellek yönetimiyle çakışıyordu: `mdns-sd` değişmeyen bir servis için `ServiceResolved`ı tekrar yayınlamadığından "son görülme" hiç tazelenmiyor ve cihazlar açılıştan tam iki dakika sonra listeden **kalıcı olarak** siliniyordu. Elle eklenen adresler her hâlükârda süresizdir.
+
 **Adres seçimi (Faz 3'te ölçümle eklendi):** Bir cihaz mDNS'te birden fazla IPv4 adresi ilan eder. Gerçek bir ilan şöyle görünüyor:
 `[192.168.0.195, 127.0.0.1, 172.17.80.1, 172.24.160.1, 169.254.188.223]` — LAN arayüzü, loopback, WSL ve Hyper-V sanal adaptörleri, bir de DHCP başarısız olduğunda atanan link-local adres. Listenin ilk elemanını almak yanlış adaptöre bağlanma denemesiyle ve zaman aşımıyla sonuçlanır. Bu yüzden adresler ulaşılabilirlik ihtimaline göre sıralanır: `192.168.x` → `10.x` → `172.16-31.x` (sanal adaptörler burada) → loopback → diğer → link-local. Aynı sıralama, kullanıcıya kendi adresini gösterirken de kullanılır.
 
