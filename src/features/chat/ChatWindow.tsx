@@ -1,46 +1,19 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Send, MessageSquare, Monitor, Paperclip, MoreHorizontal } from "lucide-react";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { t } from "../../i18n";
 import { cn } from "../../lib/cn";
 import { Callout } from "../../components/Callout";
-import { MessageBubble } from "./MessageBubble";
+import { MessageList } from "./MessageList";
 import { useChatStore } from "../../stores/chatStore";
 import { useTransferStore } from "../../stores/transferStore";
 import { DeviceInfoDialog } from "../devices/DeviceInfoDialog";
-import type { ChatMessage, TrustedDevice } from "../../lib/tauri";
+import type { TrustedDevice } from "../../lib/tauri";
 
 /** ``` içeren mesaj kod bloğu sayılır (PLAN.md §3.3). */
 function looksLikeCode(body: string): boolean {
   return body.trimStart().startsWith("```");
-}
-
-/** Aynı gün mü? Gün ayracı buna göre basılır. */
-function sameDay(a: number, b: number): boolean {
-  return new Date(a * 1000).toDateString() === new Date(b * 1000).toDateString();
-}
-
-function formatDay(seconds: number): string {
-  const date = new Date(seconds * 1000);
-  const today = new Date();
-  const yesterday = new Date(today.getTime() - 86_400_000);
-
-  if (date.toDateString() === today.toDateString()) return t("chats.today");
-  if (date.toDateString() === yesterday.toDateString()) return t("chats.yesterday");
-  return date.toLocaleDateString("tr-TR", { day: "numeric", month: "long", year: "numeric" });
-}
-
-/** Ardışık aynı yönlü ve yakın zamanlı mesajlar tek grup sayılır. */
-const GROUP_WINDOW_SECONDS = 120;
-
-function isSameGroup(previous: ChatMessage | undefined, current: ChatMessage): boolean {
-  if (!previous) return false;
-  return (
-    previous.direction === current.direction &&
-    current.sentAt - previous.sentAt < GROUP_WINDOW_SECONDS &&
-    sameDay(previous.sentAt, current.sentAt)
-  );
 }
 
 export function ChatWindow({ device }: { device: TrustedDevice }) {
@@ -53,7 +26,6 @@ export function ChatWindow({ device }: { device: TrustedDevice }) {
   const [infoOpen, setInfoOpen] = useState(false);
   const sendFile = useTransferStore((s) => s.send);
 
-  const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Sürükle-bırak (PLAN.md §3.3). Tarayıcının drop olayı Tauri'de dosya YOLU
@@ -92,13 +64,6 @@ export function ChatWindow({ device }: { device: TrustedDevice }) {
     }
   };
 
-  // Yeni mesajda en alta kaydır. Boyama öncesi çalışmalı, yoksa liste bir kare
-  // yanlış konumda görünür.
-  useLayoutEffect(() => {
-    const element = scrollRef.current;
-    if (element) element.scrollTop = element.scrollHeight;
-  }, [messages.length, device.id]);
-
   const submit = () => {
     const body = draft.trim();
     if (!body) return;
@@ -109,8 +74,8 @@ export function ChatWindow({ device }: { device: TrustedDevice }) {
 
   return (
     <>
-      <header className="flex h-[var(--lu-header-h)] shrink-0 items-center gap-3 border-b border-divider px-5">
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-lu-full bg-layer-alt">
+      <header className="flex h-[var(--lu-header-h)] shrink-0 items-center gap-2 border-b border-divider px-5">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-layer-alt">
           <Monitor size={16} className="text-fg-secondary" />
         </span>
         <span className="min-w-0">
@@ -142,7 +107,11 @@ export function ChatWindow({ device }: { device: TrustedDevice }) {
 
       <DeviceInfoDialog device={device} open={infoOpen} onClose={() => setInfoOpen(false)} />
 
-      <div ref={scrollRef} className="relative flex-1 overflow-y-auto py-4">
+      <div
+        className="relative min-h-0 flex-1"
+        // Sürükle-bırak göstergesi listenin ÜSTÜNDE durmalı; sanallaştırılmış
+        // liste kendi kaydırma kabını yönettiği için sarmalayıcıya konuyor.
+      >
         {dropActive ? (
           <div className="pointer-events-none absolute inset-3 z-10 flex items-center justify-center rounded-lu-lg border-2 border-dashed border-accent bg-accent-subtle text-[length:var(--lu-text-body)] font-semibold text-accent">
             {t("chats.dropHere")}
@@ -153,30 +122,7 @@ export function ChatWindow({ device }: { device: TrustedDevice }) {
             {t("chats.noMessages")}
           </p>
         ) : (
-          messages.map((message, index) => {
-            const previous = messages[index - 1];
-            const next = messages[index + 1];
-            const newDay = !previous || !sameDay(previous.sentAt, message.sentAt);
-
-            return (
-              <div key={message.msgId}>
-                {newDay ? (
-                  <div className="my-3 flex items-center gap-3 px-5">
-                    <span className="h-px flex-1 bg-divider" />
-                    <span className="text-[length:var(--lu-text-caption)] text-fg-tertiary">
-                      {formatDay(message.sentAt)}
-                    </span>
-                    <span className="h-px flex-1 bg-divider" />
-                  </div>
-                ) : null}
-                <MessageBubble
-                  message={message}
-                  firstOfGroup={newDay || !isSameGroup(previous, message)}
-                  lastOfGroup={!next || !isSameGroup(message, next)}
-                />
-              </div>
-            );
-          })
+          <MessageList deviceId={device.id} messages={messages} />
         )}
       </div>
 
