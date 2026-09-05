@@ -15,6 +15,23 @@ use crate::error::{AppError, AppResult};
 /// Hızlı gönder penceresinin etiketi.
 pub const QUICK_WINDOW: &str = "quick";
 
+/// Pencere açılmadan hemen önce yakalanan seçim.
+///
+/// Pencereye parametreyle geçirilemiyor (webview kendi hayat döngüsünde
+/// başlıyor), bu yüzden burada bekletilip `quick_send_text` ile isteniyor.
+fn captured() -> &'static Mutex<Option<String>> {
+    static CAPTURED: std::sync::OnceLock<Mutex<Option<String>>> = std::sync::OnceLock::new();
+    CAPTURED.get_or_init(|| Mutex::new(None))
+}
+
+/// Yakalanan seçimi alır ve kutuyu boşaltır.
+///
+/// Tek kullanımlık: pencere kapanıp yeniden açıldığında eski bir seçimin
+/// yeniden sunulması, kullanıcının o an seçtiği şey sanılırdı.
+pub fn take_captured() -> Option<String> {
+    captured().lock().ok().and_then(|mut slot| slot.take())
+}
+
 /// Şu an kayıtlı olan kısayol. Yenisini kaydetmeden önce eskisi kaldırılır.
 fn current() -> &'static Mutex<Option<Shortcut>> {
     static CURRENT: std::sync::OnceLock<Mutex<Option<Shortcut>>> = std::sync::OnceLock::new();
@@ -62,6 +79,26 @@ pub fn register(app: &AppHandle, accelerator: &str) -> AppResult<()> {
 /// Ana pencereden ayrı bir pencere: kısayolun amacı, uygulamanın tamamını
 /// açmadan tek bir dosyayı yollamak.
 pub fn open_quick_send(app: &AppHandle) {
+    // Seçim yakalama pencereyi AÇMADAN önce yapılır: `SendInput` odaktaki
+    // pencereye gider ve kendi penceremiz açıldıktan sonra odak bizde olurdu.
+    let read_selection = app
+        .try_state::<crate::state::AppState>()
+        .and_then(|state| {
+            state
+                .db
+                .get()
+                .ok()
+                .and_then(|conn| crate::db::settings::load(&conn).ok())
+        })
+        .map(|settings| settings.quick_send_read_selection)
+        .unwrap_or(false);
+
+    if read_selection {
+        if let Ok(mut slot) = captured().lock() {
+            *slot = crate::selection::capture(app);
+        }
+    }
+
     if let Some(window) = app.get_webview_window(QUICK_WINDOW) {
         let _ = window.show();
         let _ = window.set_focus();

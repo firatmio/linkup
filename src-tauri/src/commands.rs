@@ -136,6 +136,24 @@ pub fn quick_send_devices(state: State<'_, AppState>) -> AppResult<Vec<TrustedDe
     Ok(devices.into_iter().filter(|device| device.online).collect())
 }
 
+/// Hızlı gönder penceresine sunulacak metin.
+///
+/// Öncelik SEÇİMDE: kullanıcı bir şeyi seçip kısayola bastıysa kastettiği o
+/// metindir, panoda duran eski içerik değil. Seçim yakalanamadıysa panodaki
+/// metne düşülür — kullanıcı kopyalayıp gelmiş olabilir.
+#[tauri::command]
+pub fn quick_send_text(app: tauri::AppHandle) -> Option<String> {
+    if let Some(selection) = crate::shortcut::take_captured() {
+        return Some(selection);
+    }
+
+    use tauri_plugin_clipboard_manager::ClipboardExt;
+    app.clipboard()
+        .read_text()
+        .ok()
+        .filter(|text| !text.trim().is_empty())
+}
+
 /// Hızlı gönder penceresini kapatır.
 #[tauri::command]
 pub fn close_quick_send(app: tauri::AppHandle) {

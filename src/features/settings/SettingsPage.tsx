@@ -10,6 +10,7 @@ import {
   PanelsTopLeft,
   Power,
   Keyboard,
+  TextCursorInput,
 } from "lucide-react";
 import { t } from "../../i18n";
 import { Card, PageHeader, SectionTitle, SettingRow } from "../../components/Surface";
@@ -41,6 +42,7 @@ export function SettingsPage() {
   const setCloseToTray = useSettingsStore((s) => s.setCloseToTray);
   const setAutostart = useSettingsStore((s) => s.setAutostart);
   const setGlobalShortcut = useSettingsStore((s) => s.setGlobalShortcut);
+  const setReadSelection = useSettingsStore((s) => s.setReadSelection);
 
   const info = useAppStore((s) => s.info);
   const identity = useAppStore((s) => s.identity);
@@ -106,6 +108,19 @@ export function SettingsPage() {
                   checked={settings?.autostart ?? false}
                   onChange={(enabled) => void setAutostart(enabled)}
                   label={t("settings.autostart")}
+                  disabled={!settings || savingSettings}
+                />
+              }
+            />
+            <SettingRow
+              icon={<TextCursorInput size={18} />}
+              title={t("settings.readSelection")}
+              description={t("settings.readSelection.desc")}
+              control={
+                <Switch
+                  checked={settings?.quickSendReadSelection ?? true}
+                  onChange={(enabled) => void setReadSelection(enabled)}
+                  label={t("settings.readSelection")}
                   disabled={!settings || savingSettings}
                 />
               }

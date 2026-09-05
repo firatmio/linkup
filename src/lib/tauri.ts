@@ -48,6 +48,8 @@ export interface Settings {
   autostart: boolean;
   /** Global kısayol; boş ise kısayol yok. */
   globalShortcut: string;
+  /** Kısayolda öndeki uygulamanın seçimini yakala. */
+  quickSendReadSelection: boolean;
 }
 
 /**
@@ -281,6 +283,7 @@ export const api = {
   setGlobalShortcut: (accelerator: string) =>
     invoke<Settings>("set_global_shortcut", { accelerator }),
   quickSendDevices: () => invoke<TrustedDevice[]>("quick_send_devices"),
+  quickSendText: () => invoke<string | null>("quick_send_text"),
   closeQuickSend: () => invoke<void>("close_quick_send"),
   setSetting: (key: SettingKey, value: string) =>
     invoke<Settings>("set_setting", { key, value }),

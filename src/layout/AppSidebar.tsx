@@ -33,7 +33,7 @@ export function AppSidebar() {
         başlığıyla aynı hizada başlaması gerekiyor. Faz 9'da global arama
         kutusu buraya gelecek (PLAN.md §3.2).
       */}
-      <div className="h-[var(--lu-header-h)] shrink-0" />
+      <div className="h-2.5 shrink-0" />
 
       <ul className="flex flex-col gap-0.5 px-2">
         {items.map((item) => (

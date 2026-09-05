@@ -31,6 +31,8 @@ const DEFAULTS: &[(&str, &str)] = &[
     ("autostart", "0"),
     // Boş = kısayol yok. Varsayılanın tek kaynağı burası.
     ("globalShortcut", "CmdOrCtrl+Shift+L"),
+    // Kısayola basıldığında öndeki uygulamanın SEÇİMİNİ yakala (§2.9).
+    ("quickSendReadSelection", "1"),
 ];
 
 /// Frontend'e giden ayar anlık görüntüsü.
@@ -47,6 +49,7 @@ pub struct Settings {
     pub close_to_tray: bool,
     pub autostart: bool,
     pub global_shortcut: String,
+    pub quick_send_read_selection: bool,
 }
 
 pub fn is_known_key(key: &str) -> bool {
@@ -118,6 +121,7 @@ pub fn load(conn: &Connection) -> AppResult<Settings> {
         close_to_tray: get(conn, "closeToTray")? == "1",
         autostart: get(conn, "autostart")? == "1",
         global_shortcut: get(conn, "globalShortcut")?,
+        quick_send_read_selection: get(conn, "quickSendReadSelection")? == "1",
     })
 }
 

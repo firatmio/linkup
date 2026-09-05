@@ -10,6 +10,7 @@ mod network;
 mod notifications;
 mod pairing;
 mod paths;
+mod selection;
 mod shortcut;
 mod state;
 mod transfer;
@@ -198,6 +199,7 @@ pub fn run() {
             commands::set_autostart,
             commands::set_global_shortcut,
             commands::quick_send_devices,
+            commands::quick_send_text,
             commands::close_quick_send,
             commands::open_log_dir
         ])

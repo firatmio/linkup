@@ -19,6 +19,7 @@ interface SettingsState {
   setCloseToTray: (enabled: boolean) => Promise<void>;
   setAutostart: (enabled: boolean) => Promise<void>;
   setGlobalShortcut: (accelerator: string) => Promise<void>;
+  setReadSelection: (enabled: boolean) => Promise<void>;
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
@@ -38,6 +39,16 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     set({ saving: true, error: null });
     try {
       const settings = await api.setSetting("closeToTray", enabled ? "1" : "0");
+      set({ settings, saving: false });
+    } catch (err) {
+      set({ error: translateError(err), saving: false });
+    }
+  },
+
+  setReadSelection: async (enabled) => {
+    set({ saving: true, error: null });
+    try {
+      const settings = await api.setSetting("quickSendReadSelection", enabled ? "1" : "0");
       set({ settings, saving: false });
     } catch (err) {
       set({ error: translateError(err), saving: false });

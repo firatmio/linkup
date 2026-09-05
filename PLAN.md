@@ -287,7 +287,8 @@ Chunk başına hash **kullanılmaz**. QUIC/TLS 1.3 zaten her byte'ı authenticat
 
 - **Sürekli pano izleme yapılmaz** (gizlilik açısından hassas). Yalnızca kullanıcı chat kutusunda `Ctrl+V` yaptığında pano okunur.
 - Pano içeriği metin ise → mesaj kutusuna yapıştırılır. Görsel ise → görsel mesajı olarak gönderilmeye hazırlanır. **Dosya yolu ise** → `FileOffer` akışı tetiklenir.
-- **Uygulama durumu (Faz 8):** Hızlı gönder penceresi açılışta panodaki METNİ okuyup doğrudan "mesaj olarak gönder" seçeneği sunuyor. Kullanıcı çoğu zaman bir şeyi kopyaladıktan hemen sonra kısayola basıyor; kopyaladığını bir kez daha yapıştırtmak gereksiz bir adım. Dosya yolu okuma hâlâ Faz 9'da.
+- **Uygulama durumu (Faz 8):** Hızlı gönder penceresi açılışta gönderilecek metni hazır sunuyor: önce öndeki uygulamada SEÇİLİ olan metin, o yoksa panodaki metin. Kullanıcı çoğu zaman bir şeyi seçtikten veya kopyaladıktan hemen sonra kısayola basıyor. Dosya yolu okuma hâlâ Faz 9'da.
+  - **Seçim yakalamanın bedeli açıkça kabul edildi:** Windows'ta başka bir uygulamanın seçimini okuyan API yok; tek yol öndeki pencereye `SendInput` ile Ctrl+C göndermek. Ctrl+C her uygulamada "kopyala" demek değil — konsol pencerelerinde seçim yokken çalışan komutu durdurur. Bu yüzden davranış ayarlardan kapatılabiliyor ve açıklaması bu uyarıyla birlikte duruyor. Kullanıcının panosu yakalamadan sonra geri yazılıyor: o yalnızca seçmişti, kopyalamamıştı.
 - ⚠ **Fizibilite riski:** Tauri `clipboard-manager` plugin'i yalnızca metin ve görsel okur; **dosya yolu (Windows `CF_HDROP`) okumaz.** Bu özellik için platforma özel kod gerekir (Windows: `clipboard-win`; macOS: NSPasteboard; Linux: `text/uri-list`). **Faz 9'a girmeden önce spike ile doğrulanacak.** Doğrulanamazsa özellik metin + görselle sınırlanır ve dosya için sürükle-bırak yeterli sayılır.
 
 ### 2.10 Bildirimler

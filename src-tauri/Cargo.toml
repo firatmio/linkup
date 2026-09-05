@@ -67,3 +67,9 @@ strip = true
 
 [dev-dependencies]
 tokio = { version = "1.53.1", features = ["test-util", "macros", "rt-multi-thread"] }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_UI_Input_KeyboardAndMouse",
+] }
