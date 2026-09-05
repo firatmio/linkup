@@ -79,7 +79,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
   close: () => set({ activeDeviceId: null }),
 
   select: (deviceId) => {
-    if (get().activeDeviceId === deviceId) return;
+    // Kimlik dışarıdan (bildirim yönlendirmesi) da gelebiliyor; boş bir
+    // kimlikle sohbet açmaya çalışmak kullanıcıya anlamsız bir hata gösterir.
+    if (!deviceId || get().activeDeviceId === deviceId) return;
     void get().open(deviceId);
   },
 

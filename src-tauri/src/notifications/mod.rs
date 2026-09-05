@@ -21,8 +21,16 @@ use tauri::{AppHandle, Emitter, Manager};
 pub const EVENT_ACTIVATED: &str = "notification:activated";
 
 /// Bildirime tıklanınca gidilecek yer.
+// `rename_all` yalnızca VARYANT adlarını çevirir; alan adları için
+// `rename_all_fields` gerekir. İkincisi olmadan arayüze `device_id` gidiyor,
+// arayüz ise `deviceId` okuyordu: bildirime tıklayınca sohbet tanımsız bir
+// kimlikle açılmaya çalışılıyor ve hata veriyordu.
 #[derive(Debug, Clone, Serialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum Action {
     /// Bu cihazın sohbetini aç.
     OpenChat { device_id: String },
@@ -189,15 +197,19 @@ mod tests {
     }
 
     /// Yönlendirme bilgisi frontend'in ayırt edebileceği biçimde gitmeli.
+    ///
+    /// Alan adı ARAYÜZÜN OKUDUĞU adla birebir sınanır. Bu testin ilk hâli
+    /// yalnızca değerin (`ABC`) çıktıda geçtiğine bakıyordu; alan adı yanlış
+    /// olduğu hâlde geçiyordu ve hatayı kaçırdı.
     #[test]
     fn eylem_serilestirmesi_ayirt_edilebilir() {
         let chat = serde_json::to_string(&Action::OpenChat {
             device_id: "ABC".into(),
         })
         .unwrap();
-        assert!(chat.contains("openChat") && chat.contains("ABC"), "{chat}");
+        assert_eq!(chat, r#"{"kind":"openChat","deviceId":"ABC"}"#);
 
         let files = serde_json::to_string(&Action::OpenFiles).unwrap();
-        assert!(files.contains("openFiles"), "{files}");
+        assert_eq!(files, r#"{"kind":"openFiles"}"#);
     }
 }
