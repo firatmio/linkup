@@ -98,10 +98,23 @@ impl DiscoveryService {
         endpoint: Arc<NetworkEndpoint>,
         device_name: String,
         port: u16,
+        // mDNS kapalıyken servis yine kurulur: elle eklenen cihazlar aynı
+        // kayıt defterinde yaşıyor ve onların çalışmaya devam etmesi gerek.
+        mdns_enabled: bool,
     ) -> Self {
         let device_id = endpoint.device_id();
         let instance = instance_name(&device_id);
         let registry = Arc::new(Mutex::new(Registry::new()));
+
+        if !mdns_enabled {
+            tracing::info!("mDNS ayarlardan kapatılmış; yalnızca elle ekleme çalışır");
+            return Self {
+                registry,
+                endpoint,
+                daemon: None,
+                instance,
+            };
+        }
 
         let daemon = match Self::spawn_mdns(
             app.clone(),

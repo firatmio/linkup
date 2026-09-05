@@ -61,6 +61,12 @@ pub struct TransferContext {
     pub default_download_dir: PathBuf,
     /// Kullanıcı onayı bekleyen teklifler.
     pub approvals: Arc<ApprovalManager>,
+    /// Aynı anda veri akıtan aktarım sayısını sınırlar.
+    ///
+    /// Sınır AÇILIŞTA okunur ve değiştirilemez: `Semaphore` izinleri
+    /// artırılabiliyor ama azaltılamıyor, dolayısıyla ayarı canlı uygulamak
+    /// yarım bir söz olurdu. Arayüz "yeniden başlatınca geçerli" diyor.
+    pub slots: Arc<tokio::sync::Semaphore>,
 }
 
 impl TransferContext {
@@ -196,6 +202,14 @@ async fn send_file_inner(
         .save_path
         .clone()
         .ok_or_else(|| AppError::InvalidInput("kaynak dosya bilinmiyor".to_string()))?;
+
+    // Sıra bekleniyor. İzin, veri akışı bitene kadar elde tutulur.
+    let _slot = ctx
+        .slots
+        .clone()
+        .acquire_owned()
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("aktarım sırası kapandı: {e}")))?;
 
     let mut file = tokio::fs::File::open(&source).await?;
     file.seek(std::io::SeekFrom::Start(start_offset)).await?;
@@ -472,6 +486,15 @@ async fn receive_stream_inner(
     transfer_id: &str,
     offset: u64,
 ) -> AppResult<PathBuf> {
+    // Alıcı tarafta da sıra var. Akışı okumayı geciktirmek QUIC'in kendi
+    // akış kontrolüne yansıyor: gönderen bekler, veri kaybolmaz.
+    let _slot = ctx
+        .slots
+        .clone()
+        .acquire_owned()
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("aktarım sırası kapandı: {e}")))?;
+
     let record = {
         let conn = ctx.db.get().map_err(pool_error)?;
         transfers::get(&conn, transfer_id)?

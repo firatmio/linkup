@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { api, type Settings } from "../lib/tauri";
+import { api, type Settings, type SettingKey } from "../lib/tauri";
 import { translateError } from "../i18n";
 
 /**
@@ -19,6 +19,9 @@ interface SettingsState {
   setCloseToTray: (enabled: boolean) => Promise<void>;
   setAutostart: (enabled: boolean) => Promise<void>;
   setGlobalShortcut: (accelerator: string) => Promise<void>;
+  /** Basit anahtar yazma; değeri olduğu gibi gönderir. */
+  set: (key: SettingKey, value: string) => Promise<void>;
+  setFlag: (key: SettingKey, enabled: boolean) => Promise<void>;
   setReadSelection: (enabled: boolean) => Promise<void>;
 }
 
@@ -33,6 +36,19 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     } catch (err) {
       set({ error: translateError(err) });
     }
+  },
+
+  set: async (key, value) => {
+    set({ saving: true, error: null });
+    try {
+      set({ settings: await api.setSetting(key, value), saving: false });
+    } catch (err) {
+      set({ error: translateError(err), saving: false });
+    }
+  },
+
+  setFlag: async (key, enabled) => {
+    await useSettingsStore.getState().set(key, enabled ? "1" : "0");
   },
 
   setCloseToTray: async (enabled) => {

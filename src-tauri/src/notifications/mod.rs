@@ -20,6 +20,7 @@
 //! yönlendirilebiliyor. Diğer platformlarda eklenti kullanılmaya devam ediyor
 //! (orada tıklama yönlendirmesi henüz yok).
 
+pub mod quiet;
 pub mod schedule;
 
 use std::collections::HashMap;
@@ -120,6 +121,24 @@ fn pending_state() -> &'static Mutex<HashMap<(Kind, String), Pending>> {
 /// Gösterim ANINDA yapılmaz: kısa bir gecikme boyunca aynı konudan gelen
 /// olaylar tek bildirimde toplanır ve kullanıcı bu arada uygulamaya dönerse
 /// bildirim hiç gösterilmez (bkz. `schedule`).
+/// Kullanıcı bildirim almak istiyor mu?
+///
+/// Ayar okunamazsa bildirim GÖSTERİLİR: sessizlik, kullanıcının haberi olmadan
+/// mesaj kaçırması demek olurdu.
+fn notifications_allowed(app: &AppHandle) -> bool {
+    let Some(state) = app.try_state::<crate::state::AppState>() else {
+        return true;
+    };
+    let Ok(conn) = state.db.get() else {
+        return true;
+    };
+    let Ok(settings) = crate::db::settings::load(&conn) else {
+        return true;
+    };
+
+    settings.notifications_enabled && !quiet::is_quiet_now(&settings.quiet_hours)
+}
+
 fn notify(
     app: &AppHandle,
     kind: Kind,
@@ -131,7 +150,7 @@ fn notify(
     body: String,
     action: Action,
 ) {
-    if window_has_focus(app) {
+    if window_has_focus(app) || !notifications_allowed(app) {
         return;
     }
 
@@ -162,7 +181,9 @@ fn notify(
 
         // Karar gecikme SONUNDA veriliyor: kullanıcı bu arada uygulamaya
         // dönmüş olabilir ve o durumda bildirim hiç gösterilmemeli.
-        let focused = window_has_focus(&app);
+        // Karar gecikmenin SONUNDA veriliyor; sessiz saatler bu arada
+        // başlamış olabilir.
+        let focused = window_has_focus(&app) || !notifications_allowed(&app);
         let count = {
             let Ok(mut state) = pending_state().lock() else {
                 return;

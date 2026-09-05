@@ -52,6 +52,12 @@ export interface Settings {
   quickSendReadSelection: boolean;
   /** Kurulan sürümün notları; JSON, boş ise gösterilecek bir şey yok. */
   pendingReleaseNotes: string;
+  notificationsEnabled: boolean;
+  /** "HH:MM-HH:MM"; boş ise sessiz saat yok. */
+  quietHours: string;
+  mdnsEnabled: boolean;
+  /** 0 = profile göre belirlenen varsayılan port. */
+  quicPort: number;
 }
 
 /**
@@ -81,7 +87,12 @@ export interface DiscoveredDevice {
 export interface TrustedDevice {
   id: string;
   fingerprint: string;
+  /** Gösterilecek ad: takma ad varsa o. */
   name: string;
+  /** Cihazın kendi bildirdiği ad. */
+  deviceName: string;
+  /** Kullanıcının verdiği yerel takma ad. */
+  alias: string | null;
   lastAddress: string | null;
   pairedAt: number;
   online: boolean;
@@ -300,6 +311,8 @@ export const api = {
   respondToPairing: (sessionId: string, accept: boolean) =>
     invoke<boolean>("respond_to_pairing", { sessionId, accept }),
   forgetDevice: (id: string) => invoke<boolean>("forget_device", { id }),
+  setDeviceAlias: (id: string, alias: string) =>
+    invoke<void>("set_device_alias", { id, alias }),
   setDeviceAutoAccept: (id: string, enabled: boolean) =>
     invoke<void>("set_device_auto_accept", { id, enabled }),
   clearFinishedTransfers: () => invoke<number>("clear_finished_transfers"),

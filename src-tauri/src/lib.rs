@@ -102,7 +102,28 @@ pub fn run() {
                 }
             }
             let identity = identity::load_or_create(&paths)?;
-            let device_name = default_device_name(&paths);
+
+            // Ağ ayarları yalnızca burada, açılışta okunur: cihaz adı mDNS
+            // ilanına ve `Hello` çerçevesine gömülüyor, port ise uç noktaya.
+            // İkisini de canlı değiştirmek bağlantıları koparmayı gerektirir.
+            let stored = db
+                .get()
+                .ok()
+                .and_then(|conn| db::settings::load(&conn).ok());
+
+            let device_name = stored
+                .as_ref()
+                .map(|s| s.device_name.trim().to_string())
+                .filter(|name| !name.is_empty())
+                .unwrap_or_else(|| default_device_name(&paths));
+
+            let quic_port = stored
+                .as_ref()
+                .map(|s| s.quic_port)
+                .filter(|port| *port != 0)
+                .unwrap_or(paths.quic_port);
+
+            let mdns_enabled = stored.as_ref().map(|s| s.mdns_enabled).unwrap_or(true);
 
             // QUIC uç noktası tokio runtime bağlamı ister; `setup` ana thread'de
             // ve runtime'ın DIŞINDA çalıştığı için açılış block_on içine alınır.
@@ -110,7 +131,7 @@ pub fn run() {
                 network::service::NetworkService::start(
                     identity.signing_key(),
                     device_name.clone(),
-                    paths.quic_port,
+                    quic_port,
                 )
             })?;
 
@@ -119,6 +140,7 @@ pub fn run() {
                 network.endpoint(),
                 device_name,
                 network.local_addr().port(),
+                mdns_enabled,
             );
 
             let pairing = std::sync::Arc::new(pairing::PairingManager::new(
@@ -126,11 +148,20 @@ pub fn run() {
                 db.clone(),
             ));
 
+            // Eşzamanlı aktarım sınırı açılışta okunur (bkz. `TransferContext`).
+            let concurrency = db
+                .get()
+                .ok()
+                .and_then(|conn| db::settings::load(&conn).ok())
+                .map(|s| s.max_concurrent_transfers.max(1) as usize)
+                .unwrap_or(3);
+
             let transfers = std::sync::Arc::new(transfer::engine::TransferContext {
                 db: db.clone(),
                 app: app.handle().clone(),
                 default_download_dir: paths.downloads_dir.clone(),
                 approvals: std::sync::Arc::new(transfer::approval::ApprovalManager::default()),
+                slots: std::sync::Arc::new(tokio::sync::Semaphore::new(concurrency)),
             });
 
             let connections = network::manager::ConnectionManager::new(
@@ -190,6 +221,7 @@ pub fn run() {
             commands::send_file,
             commands::respond_to_transfer,
             commands::set_device_auto_accept,
+            commands::set_device_alias,
             commands::clear_finished_transfers,
             commands::transfer_preview,
             commands::delete_transfer_file,

@@ -11,7 +11,10 @@ import {
   Power,
   Keyboard,
   TextCursorInput,
+  Radar,
+  MonitorSmartphone,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { t } from "../../i18n";
 import { Card, PageHeader, SectionTitle, SettingRow } from "../../components/Surface";
 import { Button } from "../../components/Button";
@@ -22,6 +25,10 @@ import { useUiStore, type ThemePreference } from "../../stores/uiStore";
 import { useAppStore } from "../../stores/appStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { ShortcutField } from "./ShortcutField";
+import { FilesSection } from "./FilesSection";
+import { NotificationsSection } from "./NotificationsSection";
+import { DevicesSection } from "./DevicesSection";
+import { NumberField } from "./NumberField";
 import { api } from "../../lib/tauri";
 
 const themeOptions: readonly { value: ThemePreference; label: string }[] = [
@@ -42,6 +49,12 @@ export function SettingsPage() {
   const setCloseToTray = useSettingsStore((s) => s.setCloseToTray);
   const setAutostart = useSettingsStore((s) => s.setAutostart);
   const setGlobalShortcut = useSettingsStore((s) => s.setGlobalShortcut);
+  const setSetting = useSettingsStore((s) => s.set);
+  const setFlag = useSettingsStore((s) => s.setFlag);
+
+  // Cihaz adı yazarken değil, odak kaybında kaydedilir.
+  const [deviceName, setDeviceName] = useState(settings?.deviceName ?? "");
+  useEffect(() => setDeviceName(settings?.deviceName ?? ""), [settings?.deviceName]);
   const setReadSelection = useSettingsStore((s) => s.setReadSelection);
 
   const info = useAppStore((s) => s.info);
@@ -79,8 +92,35 @@ export function SettingsPage() {
                 />
               }
             />
+            <SettingRow
+              icon={<MonitorSmartphone size={18} />}
+              title={t("settings.deviceName")}
+              description={`${t("settings.deviceName.desc")} ${t("settings.restartRequired")}`}
+              control={
+                <input
+                  type="text"
+                  value={deviceName}
+                  aria-label={t("settings.deviceName")}
+                  placeholder={t("settings.deviceName.placeholder")}
+                  disabled={!settings || savingSettings}
+                  onChange={(event) => setDeviceName(event.target.value)}
+                  onBlur={() => {
+                    if (deviceName !== (settings?.deviceName ?? "")) {
+                      void setSetting("deviceName", deviceName);
+                    }
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") event.currentTarget.blur();
+                  }}
+                  className="lu-selectable h-[var(--lu-control-h)] w-56 rounded-lu-sm border border-stroke-strong bg-layer-alt px-3 text-fg shadow-[inset_0_-1px_0_var(--lu-stroke-strong)] placeholder:text-fg-tertiary focus:border-accent focus:shadow-[inset_0_-2px_0_var(--lu-accent)] focus:outline-none disabled:pointer-events-none disabled:text-fg-disabled"
+                />
+              }
+            />
           </Card>
         </section>
+
+        <FilesSection />
+        <NotificationsSection />
 
         <section className="space-y-2">
           <SectionTitle>{t("settings.section.window")}</SectionTitle>
@@ -139,6 +179,40 @@ export function SettingsPage() {
             />
           </Card>
         </section>
+
+        <section className="space-y-2">
+          <SectionTitle>{t("settings.section.network")}</SectionTitle>
+          <Card>
+            <SettingRow
+              icon={<Radar size={18} />}
+              title={t("settings.mdns")}
+              description={`${t("settings.mdns.desc")} ${t("settings.restartRequired")}`}
+              control={
+                <Switch
+                  checked={settings?.mdnsEnabled ?? true}
+                  disabled={!settings || savingSettings}
+                  onChange={(enabled) => void setFlag("mdnsEnabled", enabled)}
+                  label={t("settings.mdns")}
+                />
+              }
+            />
+            <SettingRow
+              icon={<Network size={18} />}
+              title={t("settings.port")}
+              description={`${t("settings.port.desc")} ${t("settings.restartRequired")}`}
+              control={
+                <NumberField
+                  ariaLabel={t("settings.port")}
+                  value={settings?.quicPort ?? 0}
+                  disabled={!settings || savingSettings}
+                  onCommit={(port) => void setSetting("quicPort", String(port))}
+                />
+              }
+            />
+          </Card>
+        </section>
+
+        <DevicesSection />
 
         <section className="space-y-2">
           <SectionTitle>{t("settings.section.security")}</SectionTitle>

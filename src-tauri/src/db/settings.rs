@@ -33,6 +33,15 @@ const DEFAULTS: &[(&str, &str)] = &[
     // yeniden başlatmadan sonra "yenilikler" penceresinde gösterilip
     // temizlenir. JSON: {"version": "...", "notes": "..."}
     ("pendingReleaseNotes", ""),
+    // Bildirimler (PLAN.md §2.10)
+    ("notificationsEnabled", "1"),
+    // Sessiz saatler: "HH:MM-HH:MM", boş = kapalı. Gece yarısını geçen
+    // aralıklar da geçerli ("23:00-07:00").
+    ("quietHours", ""),
+    // Ağ (PLAN.md §2.4). İkisi de yalnızca AÇILIŞTA okunur.
+    ("mdnsEnabled", "1"),
+    // 0 = profile göre belirlenen varsayılan port.
+    ("quicPort", "0"),
     // Boş = kısayol yok. Varsayılanın tek kaynağı burası.
     ("globalShortcut", "CmdOrCtrl+Shift+L"),
     // Kısayola basıldığında öndeki uygulamanın SEÇİMİNİ yakala (§2.9).
@@ -54,6 +63,11 @@ pub struct Settings {
     pub autostart: bool,
     pub global_shortcut: String,
     pub quick_send_read_selection: bool,
+    pub pending_release_notes: String,
+    pub notifications_enabled: bool,
+    pub quiet_hours: String,
+    pub mdns_enabled: bool,
+    pub quic_port: u16,
 }
 
 pub fn is_known_key(key: &str) -> bool {
@@ -126,6 +140,11 @@ pub fn load(conn: &Connection) -> AppResult<Settings> {
         autostart: get(conn, "autostart")? == "1",
         global_shortcut: get(conn, "globalShortcut")?,
         quick_send_read_selection: get(conn, "quickSendReadSelection")? == "1",
+        pending_release_notes: get(conn, "pendingReleaseNotes")?,
+        notifications_enabled: get(conn, "notificationsEnabled")? == "1",
+        quiet_hours: get(conn, "quietHours")?,
+        mdns_enabled: get(conn, "mdnsEnabled")? == "1",
+        quic_port: parse_or_default(conn, "quicPort")?,
     })
 }
 
@@ -133,6 +152,34 @@ pub fn load(conn: &Connection) -> AppResult<Settings> {
 mod tests {
     use super::*;
     use crate::db;
+
+    /// Her bilinen anahtar `Settings` üzerinden okunabilmeli.
+    ///
+    /// Bu test, gerçekten yaşanmış bir hatadan sonra yazıldı:
+    /// `pendingReleaseNotes` DEFAULTS'a eklendi ama struct'a eklenmedi.
+    /// Yazma çalıştığı için hata görünmedi; arayüz alanı `undefined` okuyup
+    /// çöktü. Anahtar eklemek üç yeri birden değiştirmeyi gerektiriyor ve
+    /// derleyici bunu yakalamıyor.
+    #[test]
+    fn her_varsayilan_anahtar_settings_uzerinde_gorunur() {
+        let pool = db::open_in_memory().unwrap();
+        let conn = pool.get().unwrap();
+
+        let json = serde_json::to_value(load(&conn).unwrap()).unwrap();
+        let fields = json.as_object().expect("Settings bir nesne olmalı");
+
+        for (key, _) in DEFAULTS {
+            assert!(
+                fields.contains_key(*key),
+                "`{key}` DEFAULTS'ta var ama Settings'te yok"
+            );
+        }
+        assert_eq!(
+            fields.len(),
+            DEFAULTS.len(),
+            "Settings'te DEFAULTS'ta olmayan alan var"
+        );
+    }
 
     #[test]
     fn varsayilanlar_kayit_yokken_doner() {

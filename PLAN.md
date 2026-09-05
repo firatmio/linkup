@@ -497,14 +497,16 @@ Ana giriş noktası **Dashboard**'dur, chat değil. Sol sidebar sabit navigasyon
 
 | Bölüm | İçerik |
 |---|---|
-| Genel | Cihaz adı, tema, dil, açılışta başlat |
-| Dosyalar | İndirme konumu, kabul politikası + boyut eşiği, eşzamanlı transfer sayısı, hız limiti |
-| Bildirimler | Aç/kapa, tıklama davranışı, sessiz saatler |
-| Pencere | Kapatma davranışı (tray'e küçült / çık), global kısayol |
-| Cihazlar | Eşleşmiş cihaz listesi, takma ad/renk, fingerprint, "Unut" |
-| Ağ | QUIC portu, manuel cihaz ekleme, mDNS aç/kapa |
-| Gizlilik ve Güvenlik | Kendi fingerprint'in, anahtar saklama durumu, pano davranışı |
-| Gelişmiş | Log seviyesi, log klasörünü aç, DB konumu, sürüm + güncelleme kontrolü |
+| Genel | Cihaz adı ✔, tema ✔, açılışta başlat ✔ · *dil sonraya bırakıldı (tek dil yüklü)* |
+| Dosyalar | İndirme konumu ✔, kabul politikası + boyut eşiği ✔, eşzamanlı transfer sayısı ✔, hız limiti ✔ |
+| Bildirimler | Aç/kapa ✔, sessiz saatler ✔ · *tıklama davranışı yok: tek davranış var (ilgili ekranı aç) ve seçenek sunmak boş bir tercih olurdu* |
+| Pencere | Kapatma davranışı ✔, global kısayol ✔, seçili metni yakala ✔ |
+| Cihazlar | Eşleşmiş cihaz listesi ✔, takma ad ✔, fingerprint ✔, "Unut" ✔ · *renk sonraya* |
+| Ağ | QUIC portu ✔, mDNS aç/kapa ✔ · *manuel cihaz ekleme kenar çubuğunda* |
+| Gizlilik ve Güvenlik | Kendi fingerprint'in ✔, anahtar saklama durumu ✔ · *pano davranışı Faz 9* |
+| Gelişmiş | Log klasörünü aç ✔, DB konumu ✔, sürüm ✔ · *log seviyesi CLI bayrağında* |
+
+**Yeniden başlatma gerektirenler (Faz 8):** cihaz adı, QUIC portu, mDNS ve eşzamanlı aktarım sayısı yalnızca açılışta okunuyor. Cihaz adı mDNS ilanına ve `Hello` çerçevesine gömülü, port uç noktaya bağlı, eşzamanlılık sınırı ise `Semaphore` izinlerine — üçü de canlı değiştirilebilmek için açık bağlantıların koparılmasını gerektirirdi. Arayüz bunu her satırda açıkça söylüyor.
 
 ### 3.5 Bileşen kütüphanesi
 

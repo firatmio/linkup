@@ -37,7 +37,12 @@ pub struct TrustedDeviceDto {
     /// Base32 kodlu device_id.
     pub id: String,
     pub fingerprint: String,
+    /// Gösterilecek ad: takma ad varsa o.
     pub name: String,
+    /// Cihazın kendi bildirdiği ad; ayarlarda takma adın yanında gösterilir.
+    pub device_name: String,
+    /// Kullanıcının verdiği yerel takma ad.
+    pub alias: Option<String>,
     pub last_address: Option<String>,
     pub paired_at: i64,
     pub online: bool,
@@ -118,6 +123,23 @@ pub fn set_auto_accept(conn: &Connection, device_id: &[u8; 32], enabled: bool) -
     conn.execute(
         "UPDATE trusted_devices SET auto_accept = ?2 WHERE device_id = ?1",
         rusqlite::params![device_id.as_slice(), i64::from(enabled)],
+    )?;
+    Ok(())
+}
+
+/// Takma adı yazar. Boş dize takma adı kaldırır.
+///
+/// Takma ad yalnızca YEREL: karşı tarafa gitmiyor, ağda ilan edilmiyor.
+/// Kullanıcının "Ofis bilgisayarı" demesi karşı tarafın kendi adını
+/// değiştirmemeli.
+pub fn set_alias(conn: &Connection, device_id: &[u8; 32], alias: &str) -> AppResult<()> {
+    let trimmed = alias.trim();
+    conn.execute(
+        "UPDATE trusted_devices SET alias = ?2 WHERE device_id = ?1",
+        rusqlite::params![
+            device_id.as_slice(),
+            (!trimmed.is_empty()).then_some(trimmed)
+        ],
     )?;
     Ok(())
 }

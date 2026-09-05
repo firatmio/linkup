@@ -77,8 +77,8 @@ export function AppSidebar() {
           "arka planda olan bitenler" bölgesi ve alt kenara yaslı duruyor. */}
       <div className="mt-auto">
         <UpdateStatus />
+        <DiscoveredDevices />
       </div>
-      <DiscoveredDevices />
     </nav>
   );
 }

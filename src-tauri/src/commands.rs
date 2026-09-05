@@ -163,6 +163,19 @@ pub fn close_quick_send(app: tauri::AppHandle) {
     }
 }
 
+/// Cihaza yerel bir takma ad verir; boş dize takma adı kaldırır.
+#[tauri::command]
+pub fn set_device_alias(state: State<'_, AppState>, id: String, alias: String) -> AppResult<()> {
+    let device_id = parse_device_id(&id)?;
+    let conn = state.db.get().map_err(pool_error)?;
+    crate::db::devices::set_alias(&conn, &device_id, &alias)?;
+    let _ = state
+        .transfers
+        .app
+        .emit(crate::pairing::EVENT_DEVICES_CHANGED, ());
+    Ok(())
+}
+
 /// Ağda görünen, henüz eşleşmemiş cihazlar (PLAN.md §3.2 "Bulunanlar").
 #[tauri::command]
 pub fn discovered_devices(state: State<'_, AppState>) -> Vec<DiscoveredDeviceDto> {
@@ -211,6 +224,8 @@ pub fn trusted_devices(state: State<'_, AppState>) -> Vec<TrustedDeviceDto> {
                 id: data_encoding::BASE32_NOPAD.encode(&device.device_id),
                 fingerprint: crate::identity::format_fingerprint(&device.device_id),
                 name: device.display_name().to_string(),
+                device_name: device.name.clone(),
+                alias: device.alias.clone(),
                 last_address: device.last_address.clone(),
                 paired_at: device.paired_at,
                 online: state.connections.presence.is_online(&device.device_id),
