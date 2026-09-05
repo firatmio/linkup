@@ -6,6 +6,7 @@ mod error;
 mod identity;
 mod logging;
 mod network;
+mod pairing;
 mod paths;
 mod state;
 
@@ -62,7 +63,7 @@ pub fn run() {
             let network = tauri::async_runtime::block_on(async {
                 network::service::NetworkService::start(
                     identity.signing_key(),
-                    device_name,
+                    device_name.clone(),
                     paths.quic_port,
                 )
             })?;
@@ -70,11 +71,39 @@ pub fn run() {
             let discovery = discovery::DiscoveryService::start(
                 app.handle().clone(),
                 network.endpoint(),
-                default_device_name(&paths),
+                device_name,
                 network.local_addr().port(),
             );
 
-            app.manage(AppState::new(paths, db, identity, network, discovery));
+            let pairing = std::sync::Arc::new(pairing::PairingManager::new(
+                app.handle().clone(),
+                db.clone(),
+            ));
+
+            let connections = network::manager::ConnectionManager::new(
+                app.handle().clone(),
+                db.clone(),
+                network.endpoint(),
+                discovery.registry(),
+            );
+            connections.start();
+
+            // Kabul döngüsü en sonda: gelen bağlantının nereye yönleneceğini
+            // bilmeden kabul etmek onu sessizce düşürmek olurdu.
+            network.start_accepting(
+                std::sync::Arc::clone(&pairing),
+                std::sync::Arc::clone(&connections),
+            );
+
+            app.manage(AppState {
+                paths,
+                db,
+                identity,
+                network,
+                discovery,
+                pairing,
+                connections,
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -84,6 +113,10 @@ pub fn run() {
             commands::discovered_devices,
             commands::add_device_manually,
             commands::forget_discovered_device,
+            commands::trusted_devices,
+            commands::start_pairing,
+            commands::respond_to_pairing,
+            commands::forget_device,
             commands::set_setting,
             commands::open_log_dir
         ])

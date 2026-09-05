@@ -10,6 +10,7 @@
 pub mod address;
 pub mod backoff;
 pub mod endpoint;
+pub mod manager;
 pub mod protocol;
 pub mod service;
 pub mod tls;

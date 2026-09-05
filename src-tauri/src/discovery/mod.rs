@@ -214,6 +214,22 @@ impl DiscoveryService {
         });
     }
 
+    /// Bağlantı denetleyicisi, güvenilir cihazın güncel adresini buradan alır.
+    pub fn registry(&self) -> Arc<Mutex<Registry>> {
+        Arc::clone(&self.registry)
+    }
+
+    /// Keşfedilmiş bir cihazın bağlanılacak adresi.
+    pub fn address_of(&self, device_id: &[u8; 32]) -> Option<SocketAddr> {
+        let registry = self.registry.lock().expect("kayıt defteri kilidi");
+        registry.get(device_id).and_then(|d| d.preferred_address())
+    }
+
+    /// Base32 kodlu kimliği çözer.
+    pub fn parse_device_id(id: &str) -> Option<[u8; 32]> {
+        decode_device_id(id)
+    }
+
     pub fn list(&self) -> Vec<DiscoveredDeviceDto> {
         let registry = self.registry.lock().expect("kayıt defteri kilidi");
         registry.list().iter().map(Into::into).collect()

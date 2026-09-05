@@ -12,6 +12,9 @@ use std::sync::Arc;
 use ed25519_dalek::SigningKey;
 
 use super::endpoint::{NetworkEndpoint, PeerConnection};
+use super::manager::ConnectionManager;
+use super::protocol::{ControlMessage, ProtocolError};
+use crate::pairing::{self, PairingManager};
 
 pub struct NetworkService {
     endpoint: Arc<NetworkEndpoint>,
@@ -42,17 +45,27 @@ impl NetworkService {
         };
 
         let local_addr = endpoint.local_addr()?;
-        let endpoint = Arc::new(endpoint);
-
-        let accept_endpoint = Arc::clone(&endpoint);
-        tauri::async_runtime::spawn(async move {
-            accept_loop(accept_endpoint).await;
-        });
 
         Ok(Self {
-            endpoint,
+            endpoint: Arc::new(endpoint),
             local_addr,
         })
+    }
+
+    /// Gelen bağlantıları kabul etmeye başlar.
+    ///
+    /// Kabul döngüsü, eşleştirme ve bağlantı denetleyicisi kurulduktan SONRA
+    /// başlatılır: gelen bir bağlantının nereye yönleneceğini bilmeden kabul
+    /// etmek, bağlantıyı sessizce düşürmek olurdu.
+    pub fn start_accepting(
+        &self,
+        pairing: Arc<PairingManager>,
+        connections: Arc<ConnectionManager>,
+    ) {
+        let endpoint = Arc::clone(&self.endpoint);
+        tauri::async_runtime::spawn(async move {
+            accept_loop(endpoint, pairing, connections).await;
+        });
     }
 
     pub fn local_addr(&self) -> SocketAddr {
@@ -109,11 +122,17 @@ fn bind(
     NetworkEndpoint::bind(signing_key, device_name.to_string(), addr)
 }
 
-async fn accept_loop(endpoint: Arc<NetworkEndpoint>) {
+async fn accept_loop(
+    endpoint: Arc<NetworkEndpoint>,
+    pairing: Arc<PairingManager>,
+    connections: Arc<ConnectionManager>,
+) {
     while let Some(result) = endpoint.accept().await {
         match result {
             Ok(connection) => {
-                tauri::async_runtime::spawn(handle_connection(connection));
+                let pairing = Arc::clone(&pairing);
+                let connections = Arc::clone(&connections);
+                tauri::async_runtime::spawn(handle_connection(pairing, connections, connection));
             }
             Err(err) => {
                 // Tek bir başarısız el sıkışma dinlemeyi durdurmamalı: sürüm
@@ -126,15 +145,46 @@ async fn accept_loop(endpoint: Arc<NetworkEndpoint>) {
     tracing::info!("kabul döngüsü sona erdi");
 }
 
-async fn handle_connection(connection: PeerConnection) {
+/// Gelen bağlantıyı yönlendirir.
+///
+/// Eşleşmemiş bir cihaz YALNIZCA eşleştirme isteği gönderebilir; başka her
+/// mesaj reddedilir (PLAN.md §2.2.1 madde 4). Aksi hâlde eşleşme, güvenlik
+/// kararı olmaktan çıkıp yalnızca bir kayıt işlemine dönerdi.
+async fn handle_connection(
+    pairing: Arc<PairingManager>,
+    connections: Arc<ConnectionManager>,
+    mut connection: PeerConnection,
+) {
+    let device_id = connection.peer_device_id;
+
     tracing::info!(
         peer = %connection.peer.device_name,
         addr = %connection.remote_address(),
         version = connection.negotiated_version,
-        "bağlantı kuruldu"
+        trusted = pairing.is_trusted(&device_id),
+        "gelen bağlantı"
     );
 
-    // Faz 4'te burada eşleşme kontrolü yapılacak; şu an yetkilendirilmiş eş
-    // kavramı olmadığı için bağlantı kapatılıyor.
+    if pairing.is_trusted(&device_id) {
+        connections.hold(connection).await;
+        return;
+    }
+
+    match connection.next_control_message().await {
+        Ok(ControlMessage::PairingRequest) => {
+            let result = pairing::run(Arc::clone(&pairing), &mut connection, false).await;
+            if result.is_ok() {
+                connections.supervise(device_id);
+            }
+        }
+        Ok(other) => {
+            tracing::warn!(?other, "eşleşmemiş cihazdan izin verilmeyen mesaj");
+            let _ = connection
+                .send(&ControlMessage::Error(ProtocolError::NotPaired))
+                .await;
+        }
+        Err(err) => tracing::debug!(error = %err, "eşleşmemiş bağlantı kapandı"),
+    }
+
     connection.close();
 }

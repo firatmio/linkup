@@ -216,6 +216,8 @@ pub struct PeerConnection {
     /// Karşı tarafın TLS sertifikasından okunan kimlik. Kaynağı sertifikadır,
     /// karşı tarafın beyanı değil — güvenilecek olan budur.
     pub peer_device_id: [u8; 32],
+    /// Kendi kimliğimiz — SAS hesaplaması iki tarafın anahtarını da ister.
+    pub local_device_id: [u8; 32],
     pub peer: Hello,
     pub negotiated_version: u16,
 }
@@ -243,7 +245,7 @@ impl PeerConnection {
             _ => return Err(NetworkError::UnexpectedMessage),
         };
 
-        Self::finish(connection, send, recv, peer, peer_device_id)
+        Self::finish(connection, send, recv, peer, peer_device_id, device_id)
     }
 
     /// Bağlantıyı kabul eden taraf: kontrol stream'ini bekler, `Hello` okur,
@@ -285,7 +287,7 @@ impl PeerConnection {
         let ours = Hello::new(device_name, device_id);
         write_frame(&mut send, &ControlMessage::HelloAck(ours)).await?;
 
-        Self::finish(connection, send, recv, peer, peer_device_id)
+        Self::finish(connection, send, recv, peer, peer_device_id, device_id)
     }
 
     fn finish(
@@ -294,6 +296,7 @@ impl PeerConnection {
         control_recv: RecvStream,
         peer: Hello,
         peer_device_id: [u8; 32],
+        local_device_id: [u8; 32],
     ) -> Result<Self, NetworkError> {
         // Karşı taraf `Hello` içinde istediği kimliği beyan edebilir; sertifika
         // ise yalanlayamaz. İkisi ayrışıyorsa bağlantı sahtedir.
@@ -317,6 +320,7 @@ impl PeerConnection {
             control_send,
             control_recv,
             peer_device_id,
+            local_device_id,
             peer,
             negotiated_version,
         })
@@ -328,6 +332,12 @@ impl PeerConnection {
 
     pub fn connection(&self) -> &Connection {
         &self.connection
+    }
+
+    /// Kontrol akışına bir mesaj yazar.
+    pub async fn send(&mut self, message: &ControlMessage) -> Result<(), NetworkError> {
+        write_frame(&mut self.control_send, message).await?;
+        Ok(())
     }
 
     /// Canlılık yoklaması. Gidiş-dönüş süresini döndürür.

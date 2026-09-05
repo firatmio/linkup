@@ -217,6 +217,8 @@ PIN girme yerine **her iki cihazda da aynı kodu gösterip kullanıcıya onaylat
 
 > **Neden PIN girme değil:** Tek yönlü PIN girişi, PIN'i gerçek bir PAKE (SPAKE2) olarak kullanmadıkça MITM'i engellemez — düz HMAC-challenge, saldırgan mesajları relay ettiğinde geçer. SAS, SPAKE2 kadar güvenli ama uygulaması kat kat basit; UX'i de daha az sürtünmeli. Detay: §10-K2.
 
+**Uygulama notu (Faz 4):** Uygulama seviyesinde ayrıca heartbeat DÖNGÜSÜ kurulmadı. QUIC'in kendi keep-alive'ı (5 sn) bağlantıyı canlı tutuyor ve `max_idle_timeout` (20 sn) ölü bağlantıyı zaten hataya çeviriyor (§2.2.2); ikinci bir canlılık mekanizması yalnızca trafik ve karmaşıklık eklerdi. `Heartbeat` mesajı RTT ölçmek için duruyor.
+
 **Eşleşme kaldırma:** Ayarlarda cihazı "Unut" → `trusted_devices`'tan silinir, aktif bağlantı kapatılır. Karşı tarafa bilgi gitmez (o taraf da manuel unutmalıdır); UI bunu açıkça belirtir.
 
 ### 2.6 Kimlik ve Anahtar Yönetimi
@@ -661,6 +663,9 @@ Windows Firewall "Public network" profili ve kurumsal/misafir ağlardaki client 
 
 **K8 — UI dili Türkçe, ama i18n altyapısı baştan.**
 Metinler sözlük dosyasında toplanır; v1'de tek dil yüklenir. Sonradan i18n eklemek tüm UI dosyalarına dokunmayı gerektirirdi.
+
+**K10 — Eşleştirme bildirimleri arayüzden soyutlandı.**
+`PairingManager` doğrudan Tauri'ye yayın yapmıyor; `PairingNotifier` arayüzü üzerinden yapıyor. Gerekçe test edilebilirlik: eşleştirme uygulamanın en güvenlik-kritik akışı ve yalnızca elle tıklayarak sınanması kabul edilemezdi. Bu soyutlama sayesinde akış, iki gerçek QUIC/TLS uç noktası arasında — dolayısıyla gerçek channel binding ile — otomatik olarak test ediliyor: iki taraf da onaylayınca aynı kodun göründüğü, tek taraflı onayın kayıt oluşturmadığı ve eşleşme sonrası pinlenmiş bağlantının kod sormadığı testlerle kapalı.
 
 **K9 — Uzak CI servisi yok; doğrulama pre-push hook'u ile yerelde.**
 Uzak koşucunun (GitHub Actions vb.) üç değeri var: commit öncesi unutulanı yakalamak, temiz oda/tekrarlanabilirlik, çapraz platform doğrulama. Tek geliştirici, tek makine ve Windows-öncelikli bir uygulamada ikincisi ve üçüncüsü henüz spekülatif; birincisi ise `.githooks/pre-push` ile bedava çözülüyor. Docker'lı bir yerel CI da değerlendirildi ve elendi: Linux'u doğrular ama asıl riskin bulunduğu Windows'a özgü kodu (keyring backend'i, rezerve dosya adları, MAX_PATH — §2.6, §2.13.1) test edemez.

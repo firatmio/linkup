@@ -111,7 +111,6 @@ impl Registry {
         self.devices.len() != before
     }
 
-    #[cfg(test)]
     pub fn get(&self, device_id: &[u8; 32]) -> Option<&DiscoveredDevice> {
         self.devices.get(device_id)
     }

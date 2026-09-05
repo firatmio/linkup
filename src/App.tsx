@@ -8,6 +8,7 @@ import { SettingsPage } from "./features/settings/SettingsPage";
 import { initTheme, useUiStore } from "./stores/uiStore";
 import { useAppStore } from "./stores/appStore";
 import { subscribeToDiscovery, useDeviceStore } from "./stores/deviceStore";
+import { subscribeToPairing, usePairingStore } from "./stores/pairingStore";
 
 export default function App() {
   const loadAppInfo = useAppStore((s) => s.load);
@@ -22,6 +23,11 @@ export default function App() {
   const loadDevices = useDeviceStore((s) => s.load);
   useEffect(() => void loadDevices(), [loadDevices]);
   useEffect(() => subscribeToDiscovery(), []);
+
+  // Eşleşmiş cihazlar ve eşleştirme istekleri.
+  const loadTrusted = usePairingStore((s) => s.loadTrusted);
+  useEffect(() => void loadTrusted(), [loadTrusted]);
+  useEffect(() => subscribeToPairing(), []);
 
   return (
     // Masaüstü uygulaması dosya protokolünden servis edildiği için HashRouter.

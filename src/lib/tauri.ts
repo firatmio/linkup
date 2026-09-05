@@ -57,10 +57,62 @@ export interface DiscoveredDevice {
   source: DiscoverySource;
 }
 
+/** Eşleşmiş, güvenilir cihaz (PLAN.md §2.12). */
+export interface TrustedDevice {
+  id: string;
+  fingerprint: string;
+  name: string;
+  lastAddress: string | null;
+  pairedAt: number;
+  online: boolean;
+}
+
+/** Eşleştirme onayı istendiğinde gelen olay (PLAN.md §2.5). */
+export interface PairingRequest {
+  sessionId: string;
+  deviceId: string;
+  deviceName: string;
+  fingerprint: string;
+  /** Karşı ekranla karşılaştırılacak 6 haneli kod. */
+  code: string;
+  initiatedByUs: boolean;
+}
+
+export interface PairingFinished {
+  sessionId: string;
+  ok: boolean;
+  /** Başarısızsa i18n anahtarı. */
+  reason: string | null;
+}
+
 /** Backend'in yayınladığı olaylar. */
 export const events = {
   discoveryChanged: "discovery:changed",
+  devicesChanged: "devices:changed",
+  devicesPresence: "devices:presence",
+  pairingRequested: "pairing:requested",
+  pairingFinished: "pairing:finished",
 } as const;
+
+export function onPairingRequested(
+  handler: (request: PairingRequest) => void,
+): Promise<UnlistenFn> {
+  return listen<PairingRequest>(events.pairingRequested, (e) => handler(e.payload));
+}
+
+export function onPairingFinished(
+  handler: (result: PairingFinished) => void,
+): Promise<UnlistenFn> {
+  return listen<PairingFinished>(events.pairingFinished, (e) => handler(e.payload));
+}
+
+/** Güvenilir cihaz listesi veya çevrimiçilik değiştiğinde tetiklenir. */
+export function onDevicesChanged(handler: () => void): Promise<UnlistenFn[]> {
+  return Promise.all([
+    listen(events.devicesChanged, () => handler()),
+    listen(events.devicesPresence, () => handler()),
+  ]);
+}
 
 export function onDiscoveryChanged(
   handler: (devices: DiscoveredDevice[]) => void,
@@ -82,5 +134,11 @@ export const api = {
     invoke<DiscoveredDevice>("add_device_manually", { address }),
   forgetDiscoveredDevice: (id: string) =>
     invoke<boolean>("forget_discovered_device", { id }),
+  trustedDevices: () => invoke<TrustedDevice[]>("trusted_devices"),
+  /** Eşleştirmeyi başlatır; akış bitene kadar (en fazla 90 sn) bekler. */
+  startPairing: (id: string) => invoke<void>("start_pairing", { id }),
+  respondToPairing: (sessionId: string, accept: boolean) =>
+    invoke<boolean>("respond_to_pairing", { sessionId, accept }),
+  forgetDevice: (id: string) => invoke<boolean>("forget_device", { id }),
   openLogDir: () => invoke<void>("open_log_dir"),
 };

@@ -31,9 +31,19 @@ pub mod capabilities {
 pub enum ControlMessage {
     Hello(Hello),
     HelloAck(Hello),
-    Heartbeat { nonce: u64 },
-    HeartbeatAck { nonce: u64 },
+    Heartbeat {
+        nonce: u64,
+    },
+    HeartbeatAck {
+        nonce: u64,
+    },
     Error(ProtocolError),
+    /// Eşleştirme başlatma isteği (PLAN.md §2.5).
+    PairingRequest,
+    /// Kullanıcı kodu onayladı. Eşleşme ancak İKİ taraf da onaylarsa tamamlanır.
+    PairingConfirm,
+    /// Kullanıcı reddetti veya süre doldu.
+    PairingReject,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -275,6 +285,9 @@ mod tests {
         assert_eq!(encode(&ControlMessage::Heartbeat { nonce: 1 }), 2);
         assert_eq!(encode(&ControlMessage::HeartbeatAck { nonce: 1 }), 3);
         assert_eq!(encode(&ControlMessage::Error(ProtocolError::Internal)), 4);
+        assert_eq!(encode(&ControlMessage::PairingRequest), 5);
+        assert_eq!(encode(&ControlMessage::PairingConfirm), 6);
+        assert_eq!(encode(&ControlMessage::PairingReject), 7);
     }
 
     #[test]

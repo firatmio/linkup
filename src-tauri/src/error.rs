@@ -30,6 +30,10 @@ pub enum AppError {
     #[error("cihaza ulaşılamadı: {0}")]
     Unreachable(String),
 
+    /// Eşleştirme akışından gelen, kendi i18n anahtarını taşıyan hata.
+    #[error("eşleştirme başarısız: {0}")]
+    Pairing(&'static str),
+
     #[error("beklenmeyen hata: {0}")]
     Internal(#[from] anyhow::Error),
 }
@@ -44,6 +48,7 @@ impl AppError {
             AppError::InvalidInput(_) => "error.invalidInput",
             AppError::InvalidAddress(_) => "error.invalidAddress",
             AppError::Unreachable(_) => "error.unreachable",
+            AppError::Pairing(code) => code,
             AppError::Internal(_) => "error.internal",
         }
     }

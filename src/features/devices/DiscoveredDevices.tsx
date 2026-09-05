@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Plus, Radar, Monitor, X } from "lucide-react";
+import { Plus, Radar, Monitor, X, Link2 } from "lucide-react";
 import { t } from "../../i18n";
 import { cn } from "../../lib/cn";
 import { Button } from "../../components/Button";
 import { useDeviceStore } from "../../stores/deviceStore";
 import { ManualAddDialog } from "./ManualAddDialog";
+import { usePairingStore } from "../../stores/pairingStore";
 
 /**
  * Sidebar'ın altındaki "Bulunanlar" bölümü (PLAN.md §3.2): ağda görünen ama
@@ -15,6 +16,9 @@ export function DiscoveredDevices() {
   const devices = useDeviceStore((s) => s.discovered);
   const listError = useDeviceStore((s) => s.listError);
   const forget = useDeviceStore((s) => s.forget);
+  const startPairing = usePairingStore((s) => s.start);
+  const starting = usePairingStore((s) => s.starting);
+  const trusted = usePairingStore((s) => s.trusted);
 
   return (
     <div className="mt-auto border-t border-divider px-2 py-3">
@@ -39,7 +43,9 @@ export function DiscoveredDevices() {
         </p>
       ) : (
         <ul className="mb-1 flex max-h-52 flex-col gap-0.5 overflow-y-auto">
-          {devices.map((device) => (
+          {devices
+            .filter((device) => !trusted.some((d) => d.id === device.id))
+            .map((device) => (
             <li key={device.id}>
               <div
                 className={cn(
@@ -52,11 +58,16 @@ export function DiscoveredDevices() {
                 <span className="min-w-0 flex-1 truncate text-[length:var(--lu-text-body)]">
                   {device.name}
                 </span>
-                {device.source === "manual" ? (
-                  <span className="shrink-0 text-[length:var(--lu-text-caption)] text-fg-tertiary">
-                    {t("nav.discovered.manual")}
-                  </span>
-                ) : null}
+                <button
+                  type="button"
+                  aria-label={t("device.pair")}
+                  title={t("device.pair")}
+                  disabled={starting}
+                  onClick={() => void startPairing(device.id)}
+                  className="shrink-0 rounded-lu-sm p-0.5 text-fg-secondary opacity-0 transition-opacity group-hover:opacity-100 hover:bg-press hover:text-accent disabled:opacity-40"
+                >
+                  <Link2 size={14} />
+                </button>
                 <button
                   type="button"
                   aria-label={t("device.forget")}

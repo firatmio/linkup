@@ -4,6 +4,7 @@
 //! olmadığı için çağrılar bloklar; Tauri komutlarından çağrıldığında
 //! `spawn_blocking` içine alınırlar.
 
+pub mod devices;
 pub mod migrations;
 pub mod settings;
 

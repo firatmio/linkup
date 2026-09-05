@@ -29,6 +29,33 @@ export const tr = {
   "addDevice.cancel": "Vazgeç",
   "addDevice.connecting": "Bağlanılıyor…",
   "device.forget": "Listeden çıkar",
+  "device.pair": "Eşleştir",
+
+  // Eşleştirme
+  "pairing.title": "Cihazı Eşleştir",
+  "pairing.outgoing":
+    "Bu kod {device} cihazında da görünüyor olmalı. İki kod aynı mı?",
+  "pairing.incoming":
+    "{device} bu cihazla eşleşmek istiyor. Aşağıdaki kod o cihazda da aynı mı?",
+  "pairing.warning":
+    "Kodlar farklıysa ONAYLAMAYIN — araya biri girmiş olabilir.",
+  "pairing.accept": "Kodlar aynı, onayla",
+  "pairing.reject": "Reddet",
+  "pairing.waiting": "Karşı tarafın onayı bekleniyor…",
+  "pairing.starting": "Bağlanılıyor…",
+  "pairing.success": "Cihaz eşleştirildi.",
+  "pairing.error.network": "Cihaza bağlanılamadı.",
+  "pairing.error.internal": "Eşleştirme tamamlanamadı.",
+  "pairing.error.rejectedLocally": "Eşleştirme reddedildi.",
+  "pairing.error.rejectedByPeer": "Karşı taraf eşleştirmeyi reddetti.",
+  "pairing.error.timeout": "Eşleştirme zaman aşımına uğradı.",
+
+  // Güvenilir cihazlar
+  "devices.title": "Cihazlar",
+  "devices.forget": "Cihazı Unut",
+  "devices.forget.confirm":
+    "{device} unutulacak. Bu cihazla olan mesaj geçmişi de silinir ve yeniden eşleşmek için kod doğrulaması gerekir.",
+  "devices.forget.cancel": "Vazgeç",
 
   // Ana sayfa
   "dashboard.title": "Genel Bakış",
