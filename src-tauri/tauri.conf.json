@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "com.quacomes.linkup",
   "build": {
-    "beforeDevCommand": "bun run dev",
+    "beforeDevCommand": "node scripts/dev-vite.mjs",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "bun run build",
     "frontendDist": "../dist"
