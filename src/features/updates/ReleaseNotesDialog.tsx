@@ -12,8 +12,16 @@ interface StoredNotes {
   notes: string;
 }
 
-function parse(raw: string): StoredNotes | null {
-  if (!raw.trim()) return null;
+/**
+ * Kayıtlı notu çözer.
+ *
+ * `raw` tanımsız olabilir: ayarlar nesnesi backend'den geliyor ve bu alan
+ * sonradan eklendi — eski bir ikiliyle konuşan yeni bir arayüz (geliştirmede
+ * Vite yeniden yüklerken olabiliyor) alanı hiç göndermez. Sınırdan gelen
+ * veriye tip imzasına bakıp güvenmek, orada patlamak demekti.
+ */
+function parse(raw: string | undefined | null): StoredNotes | null {
+  if (!raw?.trim()) return null;
   try {
     const parsed: unknown = JSON.parse(raw);
     if (
@@ -21,7 +29,13 @@ function parse(raw: string): StoredNotes | null {
       parsed !== null &&
       typeof (parsed as StoredNotes).version === "string"
     ) {
-      return parsed as StoredNotes;
+      const notes = (parsed as StoredNotes).notes;
+      return {
+        version: (parsed as StoredNotes).version,
+        // Not alanı eksik olabilir (yayında notlar boş bırakılmış); sürüm
+        // varsa pencere yine açılmalı.
+        notes: typeof notes === "string" ? notes : "",
+      };
     }
   } catch {
     // Bozuk kayıt: gösterilecek bir şey yok, kayıt aşağıda temizlenir.
@@ -43,13 +57,18 @@ export function ReleaseNotesDialog() {
   const info = useAppStore((s) => s.info);
   const [dismissed, setDismissed] = useState(false);
 
-  const stored = settings ? parse(settings.pendingReleaseNotes) : null;
+  const raw = settings?.pendingReleaseNotes;
+  const stored = parse(raw);
   const matches = stored && info ? stored.version === info.version : false;
 
   // Sürüm tutmuyorsa kayıt hemen temizlenir; pencere hiç açılmaz.
+  //
+  // Bağımlılık çözülmüş nesne değil HAM DİZE: `parse` her render'da yeni bir
+  // nesne döndürüyor ve nesneye bağlanmak, temizleme başarısız olduğunda
+  // sonsuz bir yeniden deneme döngüsü kurardı.
   useEffect(() => {
-    if (stored && info && !matches) void clear();
-  }, [stored, info, matches]);
+    if (raw?.trim() && info && !matches) void clear();
+  }, [raw, info, matches]);
 
   if (!stored || !matches || dismissed) return null;
 
