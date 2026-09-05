@@ -18,6 +18,8 @@ interface ChatState {
 
   open: (deviceId: string) => Promise<void>;
   close: () => void;
+  /** Sohbet listesinden seçim; sidebar ile içerik bu değeri paylaşır. */
+  select: (deviceId: string) => void;
   send: (deviceId: string, body: string, isCode: boolean) => Promise<void>;
   messagesOf: (deviceId: string) => ChatMessage[];
 }
@@ -46,6 +48,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   close: () => set({ activeDeviceId: null }),
+
+  select: (deviceId) => {
+    if (get().activeDeviceId === deviceId) return;
+    void get().open(deviceId);
+  },
 
   send: async (deviceId, body, isCode) => {
     try {
