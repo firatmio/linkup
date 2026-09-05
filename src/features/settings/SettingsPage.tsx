@@ -7,14 +7,18 @@ import {
   FlaskConical,
   Fingerprint,
   KeyRound,
+  PanelsTopLeft,
+  Power,
 } from "lucide-react";
 import { t } from "../../i18n";
 import { Card, PageHeader, SectionTitle, SettingRow } from "../../components/Surface";
 import { Button } from "../../components/Button";
 import { Callout } from "../../components/Callout";
 import { SegmentedControl } from "../../components/SegmentedControl";
+import { Switch } from "../../components/Switch";
 import { useUiStore, type ThemePreference } from "../../stores/uiStore";
 import { useAppStore } from "../../stores/appStore";
+import { useSettingsStore } from "../../stores/settingsStore";
 import { api } from "../../lib/tauri";
 
 const themeOptions: readonly { value: ThemePreference; label: string }[] = [
@@ -28,6 +32,12 @@ export function SettingsPage() {
   const setThemePreference = useUiStore((s) => s.setThemePreference);
   const savingTheme = useUiStore((s) => s.savingTheme);
   const themeError = useUiStore((s) => s.error);
+
+  const settings = useSettingsStore((s) => s.settings);
+  const savingSettings = useSettingsStore((s) => s.saving);
+  const settingsError = useSettingsStore((s) => s.error);
+  const setCloseToTray = useSettingsStore((s) => s.setCloseToTray);
+  const setAutostart = useSettingsStore((s) => s.setAutostart);
 
   const info = useAppStore((s) => s.info);
   const identity = useAppStore((s) => s.identity);
@@ -61,6 +71,39 @@ export function SettingsPage() {
                   options={themeOptions}
                   onChange={(preference) => void setThemePreference(preference)}
                   disabled={savingTheme}
+                />
+              }
+            />
+          </Card>
+        </section>
+
+        <section className="space-y-2">
+          <SectionTitle>{t("settings.section.window")}</SectionTitle>
+          {settingsError ? <Callout tone="warning">{settingsError}</Callout> : null}
+          <Card>
+            <SettingRow
+              icon={<PanelsTopLeft size={18} />}
+              title={t("settings.closeToTray")}
+              description={t("settings.closeToTray.desc")}
+              control={
+                <Switch
+                  checked={settings?.closeToTray ?? true}
+                  onChange={(enabled) => void setCloseToTray(enabled)}
+                  label={t("settings.closeToTray")}
+                  disabled={!settings || savingSettings}
+                />
+              }
+            />
+            <SettingRow
+              icon={<Power size={18} />}
+              title={t("settings.autostart")}
+              description={t("settings.autostart.desc")}
+              control={
+                <Switch
+                  checked={settings?.autostart ?? false}
+                  onChange={(enabled) => void setAutostart(enabled)}
+                  label={t("settings.autostart")}
+                  disabled={!settings || savingSettings}
                 />
               }
             />

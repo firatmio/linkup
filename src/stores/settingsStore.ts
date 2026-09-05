@@ -1,0 +1,57 @@
+import { create } from "zustand";
+import { api, type Settings } from "../lib/tauri";
+import { translateError } from "../i18n";
+
+/**
+ * Ayarların tamamı (tema hariç).
+ *
+ * Tema `uiStore`da ayrı duruyor çünkü ilk boyamadan ÖNCE gerekiyor ve
+ * localStorage önbelleğiyle çalışıyor; buradaki ayarların böyle bir aciliyeti
+ * yok, doğrudan veritabanından okunuyorlar.
+ */
+interface SettingsState {
+  settings: Settings | null;
+  /** Bir yazma sürüyor; ilgili kontroller bu sırada devre dışı kalır. */
+  saving: boolean;
+  error: string | null;
+
+  load: () => Promise<void>;
+  setCloseToTray: (enabled: boolean) => Promise<void>;
+  setAutostart: (enabled: boolean) => Promise<void>;
+}
+
+export const useSettingsStore = create<SettingsState>((set) => ({
+  settings: null,
+  saving: false,
+  error: null,
+
+  load: async () => {
+    try {
+      set({ settings: await api.getSettings(), error: null });
+    } catch (err) {
+      set({ error: translateError(err) });
+    }
+  },
+
+  setCloseToTray: async (enabled) => {
+    set({ saving: true, error: null });
+    try {
+      const settings = await api.setSetting("closeToTray", enabled ? "1" : "0");
+      set({ settings, saving: false });
+    } catch (err) {
+      set({ error: translateError(err), saving: false });
+    }
+  },
+
+  setAutostart: async (enabled) => {
+    set({ saving: true, error: null });
+    try {
+      // İşletim sistemi kaydı ile ayar birlikte yazılır; kayıt başarısız
+      // olursa ayar da yazılmaz ve anahtar eski hâlinde kalır.
+      const settings = await api.setAutostart(enabled);
+      set({ settings, saving: false });
+    } catch (err) {
+      set({ error: translateError(err), saving: false });
+    }
+  },
+}));

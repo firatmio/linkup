@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { onNotificationActivated } from "../../lib/tauri";
+import { onAppNavigate, onNotificationActivated } from "../../lib/tauri";
 import { useChatStore } from "../../stores/chatStore";
 
 /**
@@ -30,9 +30,17 @@ export function useNotificationRouting() {
       else unlisten = fn;
     });
 
+    // Tepsi menüsündeki "Ayarlar" gibi backend kaynaklı yönlendirmeler.
+    let unlistenNavigate: (() => void) | undefined;
+    void onAppNavigate((path) => navigate(path)).then((fn) => {
+      if (cancelled) fn();
+      else unlistenNavigate = fn;
+    });
+
     return () => {
       cancelled = true;
       unlisten?.();
+      unlistenNavigate?.();
     };
   }, [navigate, select]);
 }

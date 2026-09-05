@@ -85,6 +85,33 @@ pub fn set_setting(state: State<'_, AppState>, key: String, value: String) -> Ap
     settings::load(&conn)
 }
 
+/// Açılışta başlatmayı açar/kapatır (PLAN.md §2.11).
+///
+/// İşletim sistemi kaydı ile ayar birlikte yazılır. Kayıt başarısız olursa
+/// ayar da yazılmaz: arayüzde "açık" görünen ama aslında çalışmayan bir
+/// anahtar, kapalı bir anahtardan kötüdür.
+#[tauri::command]
+pub fn set_autostart(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    enabled: bool,
+) -> AppResult<Settings> {
+    use tauri_plugin_autostart::ManagerExt;
+
+    let manager = app.autolaunch();
+    let result = if enabled {
+        manager.enable()
+    } else {
+        manager.disable()
+    };
+    result
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("açılışta başlatma ayarlanamadı: {e}")))?;
+
+    let conn = state.db.get().map_err(pool_error)?;
+    settings::set(&conn, "autostart", if enabled { "1" } else { "0" })?;
+    settings::load(&conn)
+}
+
 /// Ağda görünen, henüz eşleşmemiş cihazlar (PLAN.md §3.2 "Bulunanlar").
 #[tauri::command]
 pub fn discovered_devices(state: State<'_, AppState>) -> Vec<DiscoveredDeviceDto> {

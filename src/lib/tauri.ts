@@ -38,10 +38,24 @@ export interface IdentityInfo {
 export interface Settings {
   theme: string;
   deviceName: string;
+  downloadDir: string;
+  acceptPolicy: string;
+  acceptSizeThreshold: number;
+  maxConcurrentTransfers: number;
+  speedLimitBytes: number;
+  /** Kapatma düğmesi pencereyi tepsiye küçültür. */
+  closeToTray: boolean;
+  autostart: boolean;
 }
 
-/** Yazılabilir ayar anahtarları — Rust tarafındaki DEFAULTS listesiyle eşleşir. */
-export type SettingKey = keyof Settings;
+/**
+ * Yazılabilir ayar anahtarları — Rust tarafındaki DEFAULTS listesiyle eşleşir.
+ *
+ * `autostart` burada YOK: işletim sistemi kaydıyla birlikte yazılması gerekir
+ * ve kendi komutu var (`setAutostart`). Düz `setSetting` ile yazılabilseydi,
+ * ayar açık görünürken kayıt hiç oluşmayabilirdi.
+ */
+export type SettingKey = Exclude<keyof Settings, "autostart">;
 
 /** Cihazın nasıl bulunduğu (PLAN.md §2.4). */
 export type DiscoverySource = "mdns" | "manual";
@@ -179,7 +193,13 @@ export const events = {
   transferRequested: "transfer:requested",
   transferResolved: "transfer:resolved",
   notificationActivated: "notification:activated",
+  appNavigate: "app:navigate",
 } as const;
+
+/** Backend'in istediği ekrana geçiş (tepsi menüsü). */
+export function onAppNavigate(handler: (path: string) => void): Promise<UnlistenFn> {
+  return listen<string>(events.appNavigate, (e) => handler(e.payload));
+}
 
 export function onNotificationActivated(
   handler: (action: NotificationAction) => void,
@@ -255,6 +275,7 @@ export const api = {
   identityInfo: () => invoke<IdentityInfo>("identity_info"),
   getSettings: () => invoke<Settings>("get_settings"),
   /** Ayarı yazar ve güncel anlık görüntüyü döndürür. */
+  setAutostart: (enabled: boolean) => invoke<Settings>("set_autostart", { enabled }),
   setSetting: (key: SettingKey, value: string) =>
     invoke<Settings>("set_setting", { key, value }),
   discoveredDevices: () => invoke<DiscoveredDevice[]>("discovered_devices"),

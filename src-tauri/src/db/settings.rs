@@ -23,6 +23,12 @@ const DEFAULTS: &[(&str, &str)] = &[
     ("acceptSizeThreshold", "104857600"), // 100 MB
     ("maxConcurrentTransfers", "3"),
     ("speedLimitBytes", "0"), // 0 = sınırsız
+    // Pencere ve yaşam döngüsü (PLAN.md §2.11)
+    // Kapatma düğmesi tepsiye küçültür. Varsayılan açık: LinkUp arka planda
+    // çalışmadığında dosya ve mesaj alamaz, yani kapatmak sessizce
+    // "erişilemez" olmak demektir.
+    ("closeToTray", "1"),
+    ("autostart", "0"),
 ];
 
 /// Frontend'e giden ayar anlık görüntüsü.
@@ -36,6 +42,8 @@ pub struct Settings {
     pub accept_size_threshold: u64,
     pub max_concurrent_transfers: u32,
     pub speed_limit_bytes: u64,
+    pub close_to_tray: bool,
+    pub autostart: bool,
 }
 
 pub fn is_known_key(key: &str) -> bool {
@@ -104,6 +112,8 @@ pub fn load(conn: &Connection) -> AppResult<Settings> {
         accept_size_threshold: parse_or_default(conn, "acceptSizeThreshold")?,
         max_concurrent_transfers: parse_or_default(conn, "maxConcurrentTransfers")?,
         speed_limit_bytes: parse_or_default(conn, "speedLimitBytes")?,
+        close_to_tray: get(conn, "closeToTray")? == "1",
+        autostart: get(conn, "autostart")? == "1",
     })
 }
 

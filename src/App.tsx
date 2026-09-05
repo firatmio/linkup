@@ -7,6 +7,7 @@ import { IncomingFilesPage } from "./features/transfer/IncomingFilesPage";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { initTheme, useUiStore } from "./stores/uiStore";
 import { useAppStore } from "./stores/appStore";
+import { useSettingsStore } from "./stores/settingsStore";
 import { subscribeToDiscovery, useDeviceStore } from "./stores/deviceStore";
 import { subscribeToPairing, usePairingStore } from "./stores/pairingStore";
 import { subscribeToChat } from "./stores/chatStore";
@@ -27,6 +28,9 @@ export default function App() {
   useEffect(() => void loadAppInfo(), [loadAppInfo]);
   // Tema önbellekten anında uygulandı; veritabanındaki tercih onu doğrular.
   useEffect(() => void hydrateTheme(), [hydrateTheme]);
+
+  const loadSettings = useSettingsStore((s) => s.load);
+  useEffect(() => void loadSettings(), [loadSettings]);
 
   // Keşif: önce mevcut liste çekilir, sonra değişiklikler olayla akar.
   const loadDevices = useDeviceStore((s) => s.load);

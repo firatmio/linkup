@@ -12,6 +12,7 @@ mod pairing;
 mod paths;
 mod state;
 mod transfer;
+mod tray;
 
 use cli::Cli;
 use paths::AppPaths;
@@ -48,7 +49,22 @@ pub fn run() {
         None => "LinkUp".to_string(),
     };
 
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default();
+
+    // Tek instance yalnızca NORMAL çalıştırmada. Geliştirme sırasında aynı
+    // makinede iki uygulama açılıyor (`--profile a` / `--profile b`); kilit
+    // uygulama kimliğine bağlı olduğu için ikincisi hemen kapanırdı.
+    if cli.normalized_profile().is_none() {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            tray::show_window(app);
+        }));
+    }
+
+    builder
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
@@ -58,6 +74,8 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_title(&window_title);
             }
+
+            tray::setup(app.handle(), &window_title)?;
 
             let db = db::open(&paths.db_path)?;
 
@@ -138,6 +156,7 @@ pub fn run() {
             });
             Ok(())
         })
+        .on_window_event(tray::on_window_event)
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
             commands::identity_info,
@@ -163,6 +182,7 @@ pub fn run() {
             commands::open_transfer_file,
             commands::reveal_transfer_file,
             commands::set_setting,
+            commands::set_autostart,
             commands::open_log_dir
         ])
         .run(tauri::generate_context!())

@@ -187,6 +187,11 @@ export const tr = {
   "status.offline": "Çevrimdışı",
 
   // Genel
+  "settings.section.window": "Pencere",
+  "settings.closeToTray": "Kapatınca tepside kal",
+  "settings.closeToTray.desc": "Kapalıyken LinkUp mesaj ve dosya alamaz. Kapatma düğmesi pencereyi gizler, uygulama tepside çalışmaya devam eder.",
+  "settings.autostart": "Windows açılışında başlat",
+  "settings.autostart.desc": "Bilgisayar açıldığında LinkUp arka planda başlar.",
   "common.loading": "Yükleniyor…",
   "common.close": "Kapat",
   "common.cancel": "Vazgeç",
