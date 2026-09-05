@@ -217,6 +217,10 @@ PIN girme yerine **her iki cihazda da aynı kodu gösterip kullanıcıya onaylat
 
 > **Neden PIN girme değil:** Tek yönlü PIN girişi, PIN'i gerçek bir PAKE (SPAKE2) olarak kullanmadıkça MITM'i engellemez — düz HMAC-challenge, saldırgan mesajları relay ettiğinde geçer. SAS, SPAKE2 kadar güvenli ama uygulaması kat kat basit; UX'i de daha az sürtünmeli. Detay: §10-K2.
 
+**Uygulama notu (Faz 4) — eşleşme sonrası bağlantı kapatılmaz:** İlk uygulamada eşleşme biter bitmez bağlantı kapatılıyor ve yeniden bağlanma denetleyicisine bırakılıyordu. Gerçek iki cihazla denendiğinde asimetrik bir sonuç çıktı: bir taraf "tamamlandı", diğeri 0,6 ms sonra "ağ hatası" dedi. Sebep, QUIC'te `close()` çağrısının akıştaki teslim edilmemiş veriyi atması — karşı taraf son `PairingConfirm`i alamadan bağlantı düşüyordu. Eşleşme başarılıysa bağlantı artık kapatılmıyor, doğrudan bağlantı denetleyicisine devrediliyor.
+
+**Kendini onaran yeniden eşleşme:** Güvendiğimiz bir cihaz `PairingRequest` gönderirse istek kabul edilip eşleştirme yeniden koşulur. Karşı taraf bizi unutmuşsa (veya eşleşme geçmişte tek tarafta kalmışsa) iki cihazın birbirine yeniden bağlanabilmesinin tek yolu budur.
+
 **Uygulama notu (Faz 4):** Uygulama seviyesinde ayrıca heartbeat DÖNGÜSÜ kurulmadı. QUIC'in kendi keep-alive'ı (5 sn) bağlantıyı canlı tutuyor ve `max_idle_timeout` (20 sn) ölü bağlantıyı zaten hataya çeviriyor (§2.2.2); ikinci bir canlılık mekanizması yalnızca trafik ve karmaşıklık eklerdi. `Heartbeat` mesajı RTT ölçmek için duruyor.
 
 **Eşleşme kaldırma:** Ayarlarda cihazı "Unut" → `trusted_devices`'tan silinir, aktif bağlantı kapatılır. Karşı tarafa bilgi gitmez (o taraf da manuel unutmalıdır); UI bunu açıkça belirtir.

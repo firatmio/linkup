@@ -246,3 +246,51 @@ async fn eslesme_sonrasi_pinlenmis_baglanti_kod_sormaz() {
         "yeniden bağlanmada kullanıcıya kod sorulmamalı"
     );
 }
+
+/// Gerileme testi: eşleşme bittiğinde bağlantı HÂLÂ kullanılabilir olmalı.
+///
+/// İlk uygulamada eşleşme biter bitmez bağlantı kapatılıyordu; QUIC'te
+/// `close()` akıştaki teslim edilmemiş veriyi attığı için karşı taraf onay
+/// mesajını alamıyor ve bir tarafın eşleşmiş, diğerinin eşleşmemiş sayıldığı
+/// asimetrik bir durum oluşuyordu. Bağlantının eşleşmeden sonra da sağlam
+/// olması, çağıranın onu kapatmak yerine devredebilmesinin ön koşuludur.
+#[tokio::test]
+async fn eslesme_sonrasi_baglanti_kullanilabilir_kalir() {
+    let a = endpoint(19, "Cihaz A");
+    let b = endpoint(20, "Cihaz B");
+    let addr = b.local_addr().unwrap();
+
+    let (manager_a, _ha, db_a) = manager(true);
+    let (manager_b, _hb, db_b) = manager(true);
+
+    let (client, server) = tokio::join!(a.connect(addr, None), b.accept());
+    let mut client = client.unwrap();
+    let mut server = server.unwrap().unwrap();
+
+    let (ra, rb) = tokio::join!(
+        super::run(Arc::clone(&manager_a), &mut client, true),
+        super::run(Arc::clone(&manager_b), &mut server, false),
+    );
+    assert!(ra.is_ok() && rb.is_ok());
+
+    // İKİ taraf da kaydetmiş olmalı — asimetrik güven kabul edilemez.
+    assert!(db::devices::is_trusted(&db_a.get().unwrap(), &b.device_id()).unwrap());
+    assert!(db::devices::is_trusted(&db_b.get().unwrap(), &a.device_id()).unwrap());
+
+    // Bağlantı üzerinden hâlâ konuşulabilmeli.
+    //
+    // Karşı taraf ayrı bir görevde dinler: `next_control_message` heartbeat'i
+    // yerinde yanıtlayıp dinlemeye devam eder, yani hiç dönmez — onu doğrudan
+    // await etmek testi asardı.
+    let server_task = tokio::spawn(async move {
+        let _ = server.next_control_message().await;
+    });
+
+    let rtt = tokio::time::timeout(Duration::from_secs(5), client.heartbeat()).await;
+    server_task.abort();
+
+    assert!(
+        matches!(rtt, Ok(Ok(_))),
+        "eşleşmeden sonra bağlantı kullanılabilir kalmalı: {rtt:?}"
+    );
+}

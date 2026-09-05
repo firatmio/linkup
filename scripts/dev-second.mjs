@@ -8,25 +8,33 @@
  * dizinleri vermek de her profil için sıfırdan bir derleme demektir.
  *
  * Bunun yerine: `dev:a` tek derlemeyi ve tek Vite sunucusunu yönetir; bu script
- * derlenmiş binary'nin profile özel bir kopyasını çalıştırır. Böylece
- * - ikinci instance saniyeler içinde açılır,
- * - iki pencere de aynı Vite sunucusundan beslenir, HMR ikisinde de çalışır,
- * - kopya ayrı bir dosya olduğu için `dev:a` arka planda serbestçe yeniden
- *   derleyebilir.
+ * derlenmiş binary'nin profile özel bir kopyasını çalıştırır. Böylece ikinci
+ * instance saniyeler içinde açılır, iki pencere de aynı Vite sunucusundan
+ * beslenir ve `dev:a` arka planda serbestçe yeniden derleyebilir.
+ *
+ * Uygulama AYRILMIŞ (detached) olarak başlatılır: aksi hâlde bu script'i
+ * çalıştıran kabuk kapandığında süreç ağacıyla birlikte uygulama da ölür.
+ * Bu, geliştirme sırasında pencerenin sebepsiz kapanması olarak görülüyordu.
  *
  * Rust tarafı değiştiğinde bu instance'ı elle yeniden başlatın (yeni binary'yi
  * kopyalaması için).
  */
 
 import { spawn } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, openSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
 
-const profile = process.argv[2];
+const DEV_SERVER = "http://localhost:1420";
+
+const args = process.argv.slice(2);
+const profile = args.find((arg) => !arg.startsWith("-"));
+/** Çıktıyı bu terminale bağla ve süreci burada tut (Ctrl+C ile kapatmak için). */
+const attach = args.includes("--attach");
+
 if (!profile || !/^[a-z0-9_-]+$/i.test(profile)) {
-  console.error("Kullanım: node scripts/dev-second.mjs <profil>   (örn. b)");
+  console.error("Kullanım: node scripts/dev-second.mjs <profil> [--attach]   (örn. b)");
   process.exit(1);
 }
 
@@ -50,6 +58,24 @@ if (!existsSync(source)) {
   process.exit(1);
 }
 
+// Bu instance frontend'i `dev:a`nın Vite sunucusundan yükler. Sunucu ayakta
+// değilse pencere siyah açılır; sebebi baştan söylemek, sonradan aramaktan iyi.
+try {
+  const response = await fetch(DEV_SERVER, { signal: AbortSignal.timeout(2000) });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+} catch {
+  console.error(
+    [
+      `Vite geliştirme sunucusu yanıt vermiyor (${DEV_SERVER}).`,
+      "",
+      "Bu instance frontend'i oradan yükler; sunucu olmadan pencere boş açılır.",
+      "Önce birinci instance'ı başlatın ve açılmasını bekleyin:",
+      "  bun run dev:a",
+    ].join("\n"),
+  );
+  process.exit(1);
+}
+
 // Kopya ayrı bir dosya: dev:a arka planda yeniden derlerken bu instance
 // çalışmaya devam edebilir.
 const copiesDir = join(debugDir, "instances");
@@ -64,7 +90,23 @@ try {
   process.exit(1);
 }
 
-console.log(`LinkUp (${profile.toUpperCase()}) başlatılıyor — ${target}`);
+const spawnArgs = [target, ["--profile", profile]];
 
-const child = spawn(target, ["--profile", profile], { stdio: "inherit" });
-child.on("exit", (code) => process.exit(code ?? 0));
+if (attach) {
+  const child = spawn(...spawnArgs, { stdio: "inherit" });
+  child.on("exit", (code) => process.exit(code ?? 0));
+} else {
+  // Ayrılmış başlatma: script biter, uygulama yaşamaya devam eder.
+  const logPath = join(copiesDir, `linkup-${profile}.out.log`);
+  const out = openSync(logPath, "a");
+  const child = spawn(...spawnArgs, {
+    detached: true,
+    stdio: ["ignore", out, out],
+    windowsHide: false,
+  });
+  child.unref();
+
+  console.log(`LinkUp (${profile.toUpperCase()}) başlatıldı — pid ${child.pid}`);
+  console.log(`Konsol çıktısı: ${logPath}`);
+  console.log("Bu pencere kapansa da uygulama çalışmaya devam eder.");
+}

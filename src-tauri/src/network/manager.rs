@@ -17,6 +17,8 @@ use super::backoff::Backoff;
 use super::endpoint::{NetworkEndpoint, PeerConnection};
 use crate::db::{devices, DbPool};
 use crate::discovery::registry::Registry;
+use crate::network::protocol::ControlMessage;
+use crate::pairing::{self, PairingManager};
 
 /// Cihaz zaten çevrimiçiyken gözetmenin ne sıklıkla durumu yoklayacağı.
 /// Bağlantı canlılığı QUIC'in kendi keep-alive'ına bırakılmıştır.
@@ -64,6 +66,7 @@ pub struct ConnectionManager {
     db: DbPool,
     endpoint: Arc<NetworkEndpoint>,
     discovery: Arc<Mutex<Registry>>,
+    pairing: Arc<PairingManager>,
     pub presence: Arc<Presence>,
 }
 
@@ -73,12 +76,14 @@ impl ConnectionManager {
         db: DbPool,
         endpoint: Arc<NetworkEndpoint>,
         discovery: Arc<Mutex<Registry>>,
+        pairing: Arc<PairingManager>,
     ) -> Arc<Self> {
         Arc::new(Self {
             app,
             db,
             endpoint,
             discovery,
+            pairing,
             presence: Arc::new(Presence::default()),
         })
     }
@@ -221,6 +226,22 @@ impl ConnectionManager {
         // `Heartbeat` mesajı RTT ölçmek için duruyor, istendiğinde kullanılır.
         loop {
             match connection.next_control_message().await {
+                // Güvendiğimiz bir cihaz yeniden eşleşmek isteyebilir: karşı
+                // taraf bizi unutmuşsa (veya eşleşme tek tarafta kalmışsa) tek
+                // çıkış yolu budur. Reddedersek iki cihaz birbirine bir daha
+                // asla bağlanamaz.
+                Ok(ControlMessage::PairingRequest) => {
+                    tracing::info!(
+                        peer = %connection.peer.device_name,
+                        "güvenilir cihaz yeniden eşleşme istedi"
+                    );
+                    if pairing::run(Arc::clone(&self.pairing), &mut connection, false)
+                        .await
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
                 // Faz 5'ten itibaren chat ve transfer mesajları burada işlenecek.
                 Ok(message) => tracing::debug!(?message, "kontrol mesajı alındı"),
                 Err(err) => {

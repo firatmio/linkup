@@ -155,12 +155,22 @@ pub async fn start_pairing(state: State<'_, AppState>, id: String) -> AppResult<
         .await
         .map_err(|err| AppError::Pairing(err.code()));
 
-    connection.close();
-
-    if result.is_ok() {
-        state.connections.supervise(device_id);
+    match result {
+        Ok(()) => {
+            // Bağlantı kapatılmıyor: eşleşme biter bitmez kapatmak, karşı
+            // tarafın henüz okumadığı onay mesajını kaybettiriyordu.
+            let connections = std::sync::Arc::clone(&state.connections);
+            connections.supervise(device_id);
+            tauri::async_runtime::spawn(async move {
+                connections.hold(connection).await;
+            });
+            Ok(())
+        }
+        Err(err) => {
+            connection.close();
+            Err(err)
+        }
     }
-    result
 }
 
 /// Kullanıcının eşleştirme kararını akışa iletir.

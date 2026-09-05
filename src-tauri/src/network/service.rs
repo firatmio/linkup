@@ -174,7 +174,15 @@ async fn handle_connection(
         Ok(ControlMessage::PairingRequest) => {
             let result = pairing::run(Arc::clone(&pairing), &mut connection, false).await;
             if result.is_ok() {
+                // Bağlantı KAPATILMIYOR, denetleyiciye devrediliyor.
+                //
+                // Eşleşme biter bitmez kapatmak, karşı tarafın henüz okumadığı
+                // `PairingConfirm`i kaybettiriyordu: QUIC'te close(), akıştaki
+                // teslim edilmemiş veriyi atar. Sonuç, bir tarafın eşleşmiş
+                // diğerinin eşleşmemiş sayıldığı asimetrik bir durumdu.
                 connections.supervise(device_id);
+                connections.hold(connection).await;
+                return;
             }
         }
         Ok(other) => {

@@ -85,6 +85,7 @@ pub fn run() {
                 db.clone(),
                 network.endpoint(),
                 discovery.registry(),
+                std::sync::Arc::clone(&pairing),
             );
             connections.start();
 
