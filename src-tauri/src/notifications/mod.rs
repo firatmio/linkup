@@ -82,16 +82,24 @@ fn show_native(app: &AppHandle, title: &str, body: &str, action: Action) {
     };
 
     // Uygulamanın kendi AppUserModelID'si yalnızca KURULU sürümlerde kayıtlıdır
-    // (installer bir Başlat Menüsü kısayolu oluşturur). Geliştirme sırasında
-    // kayıtlı olmadığı için toast gösterilemez; o durumda PowerShell'in
-    // kimliğine düşülür. Bildirimin hiç çıkmaması, farklı bir isimle
-    // çıkmasından kötü.
+    // (installer bir Başlat Menüsü kısayolu oluşturur). Kayıtsız bir kimlikle
+    // toast göndermek HATA DÖNDÜRMEZ: Windows bildirimi sessizce yutar. Bir
+    // önceki sürüm "önce kendi kimliğini dene, başarısızsa PowerShell'e düş"
+    // yapıyordu; ilk deneme hep "başarılı" göründüğü için geliştirme
+    // yapılarında bildirimler tamamen kayboldu.
+    //
+    // Bu yüzden karar denemeyle değil, yapı tipiyle veriliyor: geliştirme
+    // yapısı kurulmadığı için PowerShell'in kayıtlı kimliğini ödünç alır
+    // (gönderen adı "Windows PowerShell" görünür ama bildirim ÇIKAR),
+    // kurulu sürüm kendi kimliğini kullanır.
     let identifier = app.config().identifier.clone();
-    if build(&identifier).show().is_ok() {
-        return;
-    }
+    let app_id = if cfg!(debug_assertions) {
+        Toast::POWERSHELL_APP_ID
+    } else {
+        &identifier
+    };
 
-    if let Err(err) = build(Toast::POWERSHELL_APP_ID).show() {
+    if let Err(err) = build(app_id).show() {
         tracing::debug!(error = %err, "bildirim gösterilemedi");
     }
 }

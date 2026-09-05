@@ -34,7 +34,18 @@ export const useTransferStore = create<TransferState>((set) => ({
         api.activeTransfers(),
         api.incomingFiles(),
       ]);
-      set({ active, incoming });
+      // İlerleme kayıtları sonlanan aktarımlarla birlikte atılır: kalan bir
+      // kayıt, veritabanında artık var olmayan bir aktarımı %100 dolu bir
+      // çubukla ekranda tutabiliyordu.
+      set((state) => ({
+        active,
+        incoming,
+        progress: Object.fromEntries(
+          active
+            .map((item) => [item.transferId, state.progress[item.transferId]] as const)
+            .filter((entry): entry is [string, TransferProgress] => Boolean(entry[1])),
+        ),
+      }));
     } catch (err) {
       set({ error: translateError(err) });
     }

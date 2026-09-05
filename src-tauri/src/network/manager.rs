@@ -520,14 +520,15 @@ impl ConnectionManager {
     fn fail_pending(&self, device_id: &[u8; 32]) {
         let Ok(conn) = self.db.get() else { return };
 
-        // Yarım kalan transferler ölmedi: `.part` dosyası duruyor, yeniden
-        // bağlanınca kaldığı yerden devam edebilir. "Duraklatıldı" göstermek,
-        // ilerlemeyen bir çubuk göstermekten dürüst.
-        if let Ok(paused) = crate::db::transfers::pause_for_device(&conn, device_id) {
-            if !paused.is_empty() {
+        // Yarım kalan transferler sonlandırılır. Yeniden bağlanınca teklifi
+        // tekrar gönderen bir mekanizma yok (resume Faz 11), bu yüzden
+        // "duraklatıldı" demek listede hiç kaybolmayan hayalet satır
+        // bırakıyordu. `.part` dosyası ve ilerleme korunuyor.
+        if let Ok(ended) = crate::db::transfers::fail_for_device(&conn, device_id) {
+            if !ended.is_empty() {
                 tracing::info!(
-                    count = paused.len(),
-                    "bağlantı koptu, transferler duraklatıldı"
+                    count = ended.len(),
+                    "bağlantı koptu, yarım transferler sonlandırıldı"
                 );
                 let _ = self.app.emit(crate::transfer::engine::EVENT_CHANGED, ());
             }
