@@ -1,9 +1,9 @@
 import { NavLink } from "react-router-dom";
-import { House, MessageSquare, FolderDown, Settings, Plus, Radar } from "lucide-react";
+import { House, MessageSquare, FolderDown, Settings } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "../lib/cn";
 import { t, type TranslationKey } from "../i18n";
-import { Button } from "../components/Button";
+import { DiscoveredDevices } from "../features/devices/DiscoveredDevices";
 
 interface NavItem {
   to: string;
@@ -70,21 +70,7 @@ export function AppSidebar() {
         ))}
       </ul>
 
-      {/* Eşleşmemiş, ağda görünen cihazlar (PLAN.md §3.2). Faz 3'te canlanacak. */}
-      <div className="mt-auto border-t border-divider px-2 py-3">
-        <div className="flex items-center gap-2 px-3 pb-2 text-fg-tertiary">
-          <Radar size={14} />
-          <span className="text-[length:var(--lu-text-caption)] font-semibold uppercase tracking-wide">
-            {t("nav.discovered")}
-          </span>
-        </div>
-        <p className="px-3 pb-2 text-[length:var(--lu-text-caption)] text-fg-tertiary">
-          {t("nav.discovered.empty")}
-        </p>
-        <Button variant="subtle" icon={<Plus size={16} />} className="w-full justify-start" disabled>
-          {t("nav.addManually")}
-        </Button>
-      </div>
+      <DiscoveredDevices />
     </nav>
   );
 }

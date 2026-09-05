@@ -62,6 +62,36 @@ impl NetworkService {
     pub fn device_id(&self) -> [u8; 32] {
         self.endpoint.device_id()
     }
+
+    /// Bu makinenin LAN'da erişilebilir adresleri.
+    ///
+    /// Uç nokta 0.0.0.0'a bağlandığı için `local_addr` tek başına kullanıcıya
+    /// bir şey söylemez; karşı cihazda elle ekleme yapabilmesi için gerçek
+    /// arayüz adresleri gerekir (PLAN.md §2.4).
+    pub fn reachable_addresses(&self) -> Vec<SocketAddr> {
+        let port = self.local_addr.port();
+        let mut addresses: Vec<SocketAddr> = if_addrs::get_if_addrs()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|iface| !iface.is_loopback())
+            .filter_map(|iface| match iface.ip() {
+                // IPv6 link-local adresleri scope id olmadan işe yaramaz,
+                // kullanıcıya göstermek kafa karıştırır.
+                std::net::IpAddr::V4(ip) => Some(SocketAddr::new(ip.into(), port)),
+                std::net::IpAddr::V6(_) => None,
+            })
+            .collect();
+        addresses.sort();
+        addresses.dedup();
+        // Kullanıcıya en muhtemel doğru adresi ilk sırada göster.
+        super::address::sort_by_reachability(&mut addresses, |addr| addr.ip());
+        addresses
+    }
+
+    /// Keşif servisi elle ekleme sırasında bu uç nokta üzerinden bağlanır.
+    pub fn endpoint(&self) -> Arc<NetworkEndpoint> {
+        Arc::clone(&self.endpoint)
+    }
 }
 
 impl Drop for NetworkService {

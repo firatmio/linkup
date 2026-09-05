@@ -5,6 +5,7 @@ use serde::Serialize;
 use tauri::State;
 
 use crate::db::settings::{self, Settings};
+use crate::discovery::DiscoveredDeviceDto;
 use crate::error::{AppError, AppResult};
 use crate::identity::KeyStorage;
 use crate::state::AppState;
@@ -19,6 +20,8 @@ pub struct AppInfo {
     pub downloads_dir: String,
     pub db_path: String,
     pub quic_port: u16,
+    /// Karşı cihazda elle ekleme için kullanılacak adresler.
+    pub reachable_addresses: Vec<String>,
     pub os: String,
 }
 
@@ -33,7 +36,13 @@ pub fn app_info(state: State<'_, AppState>) -> AppInfo {
         log_dir: p.log_dir.display().to_string(),
         downloads_dir: p.downloads_dir.display().to_string(),
         db_path: p.db_path.display().to_string(),
-        quic_port: p.quic_port,
+        quic_port: state.network.local_addr().port(),
+        reachable_addresses: state
+            .network
+            .reachable_addresses()
+            .iter()
+            .map(ToString::to_string)
+            .collect(),
         os: std::env::consts::OS.to_string(),
     }
 }
@@ -69,6 +78,35 @@ pub fn set_setting(state: State<'_, AppState>, key: String, value: String) -> Ap
     settings::set(&conn, &key, &value)?;
     // Güncel anlık görüntü geri döner: frontend ayrı bir okuma yapmak zorunda kalmaz.
     settings::load(&conn)
+}
+
+/// Ağda görünen, henüz eşleşmemiş cihazlar (PLAN.md §3.2 "Bulunanlar").
+#[tauri::command]
+pub fn discovered_devices(state: State<'_, AppState>) -> Vec<DiscoveredDeviceDto> {
+    state.discovery.list()
+}
+
+/// Elle adres girerek cihaz ekler (PLAN.md §2.4, §10-K7).
+#[tauri::command]
+pub async fn add_device_manually(
+    state: State<'_, AppState>,
+    address: String,
+) -> AppResult<DiscoveredDeviceDto> {
+    state
+        .discovery
+        .add_manual(&address)
+        .await
+        .map_err(|err| match err {
+            crate::discovery::DiscoveryError::BadAddress(detail) => {
+                AppError::InvalidAddress(detail)
+            }
+            other => AppError::Unreachable(other.to_string()),
+        })
+}
+
+#[tauri::command]
+pub fn forget_discovered_device(state: State<'_, AppState>, id: String) -> bool {
+    state.discovery.remove(&id)
 }
 
 /// Ayarlar → Gelişmiş → "Log klasörünü aç" (PLAN.md §2.14).

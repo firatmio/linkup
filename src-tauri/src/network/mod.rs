@@ -7,6 +7,7 @@
 //! henüz yok. Faz 5 bittiğinde bu istisna kaldırılmalı.
 #![allow(dead_code)]
 
+pub mod address;
 pub mod backoff;
 pub mod endpoint;
 pub mod protocol;

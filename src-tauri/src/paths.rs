@@ -6,7 +6,7 @@
 use std::path::PathBuf;
 
 /// Varsayılan QUIC portu. Profiller bunun üzerine sabit bir kayma ekler.
-const BASE_QUIC_PORT: u16 = 47810;
+pub const DEFAULT_QUIC_PORT: u16 = 47810;
 
 #[derive(Debug, Clone)]
 pub struct AppPaths {
@@ -66,13 +66,13 @@ impl AppPaths {
 /// portlara oturur; diğerleri ad üzerinden dağıtılır.
 fn derive_port(profile: Option<&str>) -> u16 {
     match profile {
-        None => BASE_QUIC_PORT,
-        Some("a") => BASE_QUIC_PORT + 1,
-        Some("b") => BASE_QUIC_PORT + 2,
-        Some("c") => BASE_QUIC_PORT + 3,
+        None => DEFAULT_QUIC_PORT,
+        Some("a") => DEFAULT_QUIC_PORT + 1,
+        Some("b") => DEFAULT_QUIC_PORT + 2,
+        Some("c") => DEFAULT_QUIC_PORT + 3,
         Some(other) => {
             let sum: u32 = other.bytes().map(u32::from).sum();
-            BASE_QUIC_PORT + 10 + (sum % 100) as u16
+            DEFAULT_QUIC_PORT + 10 + (sum % 100) as u16
         }
     }
 }
@@ -88,7 +88,7 @@ mod tests {
         assert_eq!(derive_port(Some("b")), 47812);
         assert_ne!(derive_port(Some("a")), derive_port(Some("b")));
         // Bilinmeyen profil de base ile çakışmamalı.
-        assert!(derive_port(Some("deneme")) > BASE_QUIC_PORT + 9);
+        assert!(derive_port(Some("deneme")) > DEFAULT_QUIC_PORT + 9);
     }
 
     #[test]

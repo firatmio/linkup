@@ -16,6 +16,19 @@ export const tr = {
   "nav.discovered": "Bulunanlar",
   "nav.discovered.empty": "Ağda cihaz aranıyor…",
   "nav.addManually": "Cihaz Ekle",
+  "nav.discovered.manual": "elle eklendi",
+
+  // Elle cihaz ekleme
+  "addDevice.title": "Cihaz Ekle",
+  "addDevice.body":
+    "Cihaz otomatik bulunamıyorsa IP adresini elle girebilirsiniz. Adres, hedef cihazın Ayarlar → Gelişmiş bölümünde yazılı.",
+  "addDevice.label": "IP adresi",
+  "addDevice.placeholder": "192.168.1.42",
+  "addDevice.hint": "Port belirtmezseniz varsayılan port kullanılır.",
+  "addDevice.submit": "Bağlan",
+  "addDevice.cancel": "Vazgeç",
+  "addDevice.connecting": "Bağlanılıyor…",
+  "device.forget": "Listeden çıkar",
 
   // Ana sayfa
   "dashboard.title": "Genel Bakış",
@@ -60,6 +73,9 @@ export const tr = {
   "settings.profile": "Geliştirme profili",
   "settings.profile.none": "Yok (varsayılan)",
   "settings.quicPort": "QUIC portu",
+  "settings.address": "Bu cihazın adresi",
+  "settings.address.desc": "Karşı cihazda \"Cihaz Ekle\" ile bu adresi girebilirsiniz",
+  "settings.address.none": "Ağ arayüzü bulunamadı",
   "settings.dataDir": "Veri klasörü",
   "settings.downloadsDir": "İndirme klasörü",
   "settings.logs": "Günlük kayıtları",
@@ -79,6 +95,8 @@ export const tr = {
   "error.db": "Veritabanı işlemi başarısız oldu.",
   "error.settingNotFound": "Ayar bulunamadı.",
   "error.invalidInput": "Geçersiz istek.",
+  "error.invalidAddress": "Geçerli bir IP adresi girin.",
+  "error.unreachable": "Cihaza ulaşılamadı. Adresi ve hedef cihazın açık olduğunu kontrol edin.",
   "error.internal": "Beklenmeyen bir hata oluştu.",
   "error.unknown": "Bilinmeyen bir hata oluştu.",
 } as const;

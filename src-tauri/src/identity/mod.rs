@@ -55,7 +55,7 @@ impl Identity {
     }
 }
 
-fn format_fingerprint(public_key: &[u8; 32]) -> String {
+pub fn format_fingerprint(public_key: &[u8; 32]) -> String {
     let encoded = BASE32_NOPAD.encode(public_key);
     encoded
         .as_bytes()

@@ -116,6 +116,15 @@ export function SettingsPage() {
             />
             <SettingRow
               icon={<Network size={18} />}
+              title={t("settings.address")}
+              description={value((i) =>
+                i.reachableAddresses.length > 0
+                  ? i.reachableAddresses.join("  ·  ")
+                  : t("settings.address.none"),
+              )}
+            />
+            <SettingRow
+              icon={<Network size={18} />}
               title={t("settings.quicPort")}
               description={value((i) => String(i.quicPort))}
             />

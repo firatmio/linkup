@@ -7,6 +7,7 @@ import { IncomingFilesPage } from "./features/transfer/IncomingFilesPage";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { initTheme, useUiStore } from "./stores/uiStore";
 import { useAppStore } from "./stores/appStore";
+import { subscribeToDiscovery, useDeviceStore } from "./stores/deviceStore";
 
 export default function App() {
   const loadAppInfo = useAppStore((s) => s.load);
@@ -16,6 +17,11 @@ export default function App() {
   useEffect(() => void loadAppInfo(), [loadAppInfo]);
   // Tema önbellekten anında uygulandı; veritabanındaki tercih onu doğrular.
   useEffect(() => void hydrateTheme(), [hydrateTheme]);
+
+  // Keşif: önce mevcut liste çekilir, sonra değişiklikler olayla akar.
+  const loadDevices = useDeviceStore((s) => s.load);
+  useEffect(() => void loadDevices(), [loadDevices]);
+  useEffect(() => subscribeToDiscovery(), []);
 
   return (
     // Masaüstü uygulaması dosya protokolünden servis edildiği için HashRouter.

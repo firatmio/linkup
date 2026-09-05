@@ -24,6 +24,12 @@ pub enum AppError {
     #[error("geçersiz istek: {0}")]
     InvalidInput(String),
 
+    #[error("geçersiz adres: {0}")]
+    InvalidAddress(String),
+
+    #[error("cihaza ulaşılamadı: {0}")]
+    Unreachable(String),
+
     #[error("beklenmeyen hata: {0}")]
     Internal(#[from] anyhow::Error),
 }
@@ -36,6 +42,8 @@ impl AppError {
             AppError::Db(_) => "error.db",
             AppError::SettingNotFound(_) => "error.settingNotFound",
             AppError::InvalidInput(_) => "error.invalidInput",
+            AppError::InvalidAddress(_) => "error.invalidAddress",
+            AppError::Unreachable(_) => "error.unreachable",
             AppError::Internal(_) => "error.internal",
         }
     }

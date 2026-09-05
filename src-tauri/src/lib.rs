@@ -1,6 +1,7 @@
 mod cli;
 mod commands;
 mod db;
+mod discovery;
 mod error;
 mod identity;
 mod logging;
@@ -66,13 +67,23 @@ pub fn run() {
                 )
             })?;
 
-            app.manage(AppState::new(paths, db, identity, network));
+            let discovery = discovery::DiscoveryService::start(
+                app.handle().clone(),
+                network.endpoint(),
+                default_device_name(&paths),
+                network.local_addr().port(),
+            );
+
+            app.manage(AppState::new(paths, db, identity, network, discovery));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
             commands::identity_info,
             commands::get_settings,
+            commands::discovered_devices,
+            commands::add_device_manually,
+            commands::forget_discovered_device,
             commands::set_setting,
             commands::open_log_dir
         ])

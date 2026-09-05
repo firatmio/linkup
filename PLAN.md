@@ -192,6 +192,9 @@ Uyumsuz sürümde bağlantı `IncompatibleVersion` ile kapatılır ve kullanıc�
 - Ayarlar → "Cihaz Ekle" → IP + port girişi → doğrudan QUIC bağlantısı → pairing akışı normal şekilde işler.
 - Eşleşmiş cihazların son bilinen IP'si DB'de tutulur; mDNS başarısız olsa bile son IP denenir.
 
+**Adres seçimi (Faz 3'te ölçümle eklendi):** Bir cihaz mDNS'te birden fazla IPv4 adresi ilan eder. Gerçek bir ilan şöyle görünüyor:
+`[192.168.0.195, 127.0.0.1, 172.17.80.1, 172.24.160.1, 169.254.188.223]` — LAN arayüzü, loopback, WSL ve Hyper-V sanal adaptörleri, bir de DHCP başarısız olduğunda atanan link-local adres. Listenin ilk elemanını almak yanlış adaptöre bağlanma denemesiyle ve zaman aşımıyla sonuçlanır. Bu yüzden adresler ulaşılabilirlik ihtimaline göre sıralanır: `192.168.x` → `10.x` → `172.16-31.x` (sanal adaptörler burada) → loopback → diğer → link-local. Aynı sıralama, kullanıcıya kendi adresini gösterirken de kullanılır.
+
 **Firewall:** Windows'ta ilk çalıştırmada UDP portu için firewall izni gerekir. Installer bu kuralı ekler; eklenemezse uygulama içinde açıklayıcı bir uyarı gösterilir.
 
 ### 2.5 Pairing — Karşılıklı Doğrulama Kodu (SAS)
@@ -593,8 +596,8 @@ Her fazın sonunda **çalışan ve elle doğrulanabilir** bir çıktı vardır.
 | **0 — İskelet** | git init · Tailwind + shadcn + Zustand + router + i18n kurulumu · AppShell + sabit sidebar · boş Dashboard/Sohbetler/Gelen Dosyalar/Ayarlar sayfaları · tema desteği · `tracing` kurulumu · **`--profile` bayrağı ve dev:a/dev:b** · CI | İki instance yan yana açılıyor, navigasyon çalışıyor, tema sistemi takip ediyor |
 | **1 — Kimlik + DB** | SQLite şeması + migration altyapısı · settings okuma/yazma · Ed25519 keypair + `keyring` (+ Linux fallback) · fingerprint UI'da görünür | Uygulama açılışta kimlik üretiyor, yeniden açılışta aynı kimliği okuyor, ayarlar kalıcı |
 | **2 — QUIC transport** | quinn endpoint · rcgen sertifika · custom cert verifier · TransportConfig tuning · `Hello` sürüm anlaşması · heartbeat · reconnect/backoff · **throughput benchmark** | İki instance loopback'te el sıkışıyor; benchmark sonucu dokümante edildi (hedef ≥400 Mbit/s) |
-| **3 — Keşif** | mDNS yayın + keşif · "Bulunanlar" listesi · manuel IP ile ekleme · son bilinen IP ile bağlanma | İki instance birbirini otomatik buluyor; mDNS kapalıyken manuel ekleme çalışıyor |
-| **4 — Pairing** | SAS hesaplama (channel binding) · iki taraflı onay dialogu · `trusted_devices` kaydı · pinlenmiş key ile otomatik yeniden bağlanma · "Unut" | Eşleştirme tamamlanıyor; uygulama yeniden başlatılınca kod sormadan bağlanıyor |
+| **3 — Keşif** | mDNS yayın + keşif · "Bulunanlar" listesi · manuel IP ile ekleme · adres sıralama | İki instance birbirini otomatik buluyor; mDNS kapalıyken manuel ekleme çalışıyor |
+| **4 — Pairing** | SAS hesaplama (channel binding) · iki taraflı onay dialogu · `trusted_devices` kaydı · son bilinen IP ile yeniden bağlanma (backoff denetleyicisi) · pinlenmiş key ile otomatik doğrulama · "Unut" | Eşleştirme tamamlanıyor; uygulama yeniden başlatılınca kod sormadan bağlanıyor |
 | **5 — Chat** | `ChatMessage`/`ChatAck`/`ReadReceipt` · mesaj persist · sohbet UI · görsel önizleme · kod bloğu · durum göstergesi · sanallaştırılmış liste | İki instance arasında mesajlaşma ve "Görüldü" çalışıyor, geçmiş kalıcı |
 | **6 — Dashboard** | Cihaz özet kartları gerçek verilerle · online durumu · son mesaj · boş durumlar | Açılış ekranı anlamlı veri gösteriyor |
 | **7 — Dosya transferi + resume** | `FileOffer`/`FileAccept` · stream akışı · **dosya adı sanitizasyonu** · disk alanı kontrolü · kabul politikası · progress UI · resume · kuyruk · hız limiti · çoklu dosya | Büyük dosya transfer ediliyor; ağ kesilip geri gelince kaldığı yerden devam ediyor; kötü niyetli dosya adları reddediliyor |
