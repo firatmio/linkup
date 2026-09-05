@@ -234,20 +234,17 @@ pub fn send_message(
     let (mut stored, frame) =
         crate::chat::prepare_outgoing(&state.db, &device_id, content_type, &body)?;
 
-    let delivered = state.connections.send_to(&device_id, frame);
-    let status = if delivered {
-        MessageStatus::Sent
-    } else {
-        MessageStatus::Failed
-    };
-
-    let conn = state.db.get().map_err(pool_error)?;
-    messages::advance_status(&conn, &stored.msg_id, status)?;
-    stored.status = status.as_str().to_string();
-
-    if !delivered {
-        tracing::info!("cihaz bağlı değil, mesaj gönderilemedi");
+    // Kuyruğa alınabildiyse durum `sending` kalır; `sent`e geçişi, çerçeveyi
+    // gerçekten akışa yazan bağlantı döngüsü yapar. Böylece "Gönderildi"
+    // ifadesi karşıya çıktığı anlamına gelir.
+    if state.connections.send_to(&device_id, frame) {
+        return Ok(stored);
     }
+
+    tracing::info!("cihaz bağlı değil, mesaj gönderilemedi");
+    let conn = state.db.get().map_err(pool_error)?;
+    messages::advance_status(&conn, &stored.msg_id, MessageStatus::Failed)?;
+    stored.status = MessageStatus::Failed.as_str().to_string();
     Ok(stored)
 }
 

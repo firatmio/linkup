@@ -29,15 +29,15 @@ impl MessageStatus {
         }
     }
 
-    /// İlerleme sırasındaki yeri. `Failed` sıradışıdır: her durumdan
-    /// gidilebilir ama ondan çıkış yalnızca yeniden gönderimle olur.
+    /// İlerleme sırasındaki yeri. `Failed` bu sıraya dâhil DEĞİLDİR:
+    /// ona geçiş `advance_status` içinde ayrıca ele alınır.
     fn rank(self) -> u8 {
         match self {
             MessageStatus::Sending => 0,
             MessageStatus::Sent => 1,
             MessageStatus::Delivered => 2,
             MessageStatus::Read => 3,
-            MessageStatus::Failed => 0,
+            MessageStatus::Failed => u8::MAX,
         }
     }
 }
@@ -129,6 +129,17 @@ pub fn list(
 /// Yalnızca ileri yönde günceller: ağdaki gecikme yüzünden `delivered`
 /// bildirimi `read`ten sonra gelebilir ve göstergeyi geri almamalıdır.
 pub fn advance_status(conn: &Connection, msg_id: &str, status: MessageStatus) -> AppResult<bool> {
+    // `Failed` sıralamanın parçası değil: yalnızca henüz yola çıkmamış
+    // (`sending`) bir mesaj başarısız olabilir. Karşı tarafa ulaşmış bir
+    // mesajı sonradan "gönderilemedi" göstermek yanlış olurdu.
+    if status == MessageStatus::Failed {
+        return Ok(conn.execute(
+            "UPDATE messages SET status = 'failed'
+             WHERE msg_id = ?1 AND direction = 'out' AND status = 'sending'",
+            [msg_id],
+        )? > 0);
+    }
+
     let ranks: Vec<&str> = [
         MessageStatus::Sending,
         MessageStatus::Sent,
@@ -182,6 +193,30 @@ pub fn mark_incoming_read(conn: &Connection, device_id: &[u8; 32]) -> AppResult<
          WHERE conversation_id = ?1 AND direction = 'in' AND status != 'read'",
         [device_id.as_slice()],
     )?;
+    Ok(ids)
+}
+
+/// Bir cihaza giden, henüz yola çıkmamış mesajları başarısız işaretler ve
+/// kimliklerini döndürür.
+///
+/// Bağlantı koptuğunda çağrılır: kuyrukta bekleyen mesaj artık gitmeyecektir,
+/// kullanıcı bunu saat ikonuna bakarak tahmin etmek zorunda kalmamalı.
+pub fn fail_pending_for_device(conn: &Connection, device_id: &[u8; 32]) -> AppResult<Vec<String>> {
+    let mut stmt = conn.prepare(
+        "SELECT msg_id FROM messages
+         WHERE conversation_id = ?1 AND direction = 'out' AND status = 'sending'",
+    )?;
+    let ids: Vec<String> = stmt
+        .query_map([device_id.as_slice()], |row| row.get(0))?
+        .collect::<Result<_, _>>()?;
+
+    if !ids.is_empty() {
+        conn.execute(
+            "UPDATE messages SET status = 'failed'
+             WHERE conversation_id = ?1 AND direction = 'out' AND status = 'sending'",
+            [device_id.as_slice()],
+        )?;
+    }
     Ok(ids)
 }
 
@@ -308,6 +343,52 @@ mod tests {
     }
 
     /// Geç gelen `delivered`, çoktan `read` olmuş mesajı geriye çekmemeli.
+    /// Gerileme testi: `failed` gerçekten yazılabilmeli.
+    ///
+    /// İlk uygulamada `Failed`in sırası 0'dı ve "sırası daha küçük olanlardan
+    /// geç" filtresi hiçbir durumu eşleştirmiyordu; gönderilemeyen mesaj
+    /// sonsuza kadar `sending` (dönen saat) olarak kalıyordu.
+    #[test]
+    fn gonderilemeyen_mesaj_basarisiz_isaretlenir() {
+        let pool = setup();
+        let conn = pool.get().unwrap();
+        send(&conn, "m1", true, MessageStatus::Sending);
+
+        assert!(advance_status(&conn, "m1", MessageStatus::Failed).unwrap());
+        assert_eq!(list(&conn, &DEVICE, 1, None).unwrap()[0].status, "failed");
+    }
+
+    /// Karşıya ulaşmış bir mesaj sonradan "gönderilemedi" olmamalı.
+    #[test]
+    fn ulasmis_mesaj_basarisiz_olamaz() {
+        let pool = setup();
+        let conn = pool.get().unwrap();
+        send(&conn, "m1", true, MessageStatus::Delivered);
+
+        assert!(!advance_status(&conn, "m1", MessageStatus::Failed).unwrap());
+        assert_eq!(
+            list(&conn, &DEVICE, 1, None).unwrap()[0].status,
+            "delivered"
+        );
+    }
+
+    #[test]
+    fn baglanti_kopunca_bekleyenler_basarisiz_olur() {
+        let pool = setup();
+        let conn = pool.get().unwrap();
+        send(&conn, "m1", true, MessageStatus::Sending);
+        send(&conn, "m2", true, MessageStatus::Sent);
+        send(&conn, "m3", false, MessageStatus::Delivered);
+
+        let failed = fail_pending_for_device(&conn, &DEVICE).unwrap();
+        assert_eq!(failed, ["m1"], "yalnızca yola çıkmamış giden mesaj");
+
+        let messages = list(&conn, &DEVICE, 10, None).unwrap();
+        assert_eq!(messages[0].status, "failed");
+        assert_eq!(messages[1].status, "sent");
+        assert_eq!(messages[2].status, "delivered");
+    }
+
     #[test]
     fn durum_geriye_gitmez() {
         let pool = setup();

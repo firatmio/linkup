@@ -26,6 +26,35 @@ interface ChatState {
 
 const EMPTY: ChatMessage[] = [];
 
+/** Durum ilerleme sırası; geriye düşüşü engeller. */
+const STATUS_RANK: Record<ChatMessage["status"], number> = {
+  sending: 0,
+  sent: 1,
+  delivered: 2,
+  read: 3,
+  failed: 0,
+};
+
+/**
+ * Henüz listede olmayan mesajlar için gelen durumlar.
+ *
+ * Gerekli çünkü backend, mesaj `invoke` yanıtı arayüze dönmeden önce durum
+ * olayı yayınlayabilir: bağlantı döngüsü çerçeveyi milisaniyeler içinde yazar.
+ * Tamponlanmazsa o güncelleme sessizce kaybolur ve mesaj "gönderiliyor"da
+ * takılı görünür.
+ */
+const pendingStatus = new Map<string, ChatMessage["status"]>();
+
+/** İki durumdan ileride olanı seçer. */
+function laterStatus(
+  current: ChatMessage["status"],
+  incoming: ChatMessage["status"],
+): ChatMessage["status"] {
+  if (incoming === "failed") return current === "sending" ? "failed" : current;
+  if (current === "failed") return incoming;
+  return STATUS_RANK[incoming] > STATUS_RANK[current] ? incoming : current;
+}
+
 export const useChatStore = create<ChatState>((set, get) => ({
   byDevice: {},
   activeDeviceId: null,
@@ -58,6 +87,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       const message = await api.sendMessage(deviceId, body, isCode);
       void usePairingStore.getState().loadTrusted();
+
+      // Mesaj listeye girmeden önce bir durum olayı gelmiş olabilir.
+      const buffered = pendingStatus.get(message.msgId);
+      if (buffered) {
+        pendingStatus.delete(message.msgId);
+        message.status = laterStatus(message.status, buffered);
+      }
+
       set((state) => ({
         byDevice: {
           ...state.byDevice,
@@ -107,12 +144,19 @@ export function subscribeToChat(): () => void {
   void onChatStatus(({ deviceId, msgId, status }) => {
     const state = useChatStore.getState();
     const messages = state.byDevice[deviceId];
-    if (!messages) return;
+
+    if (!messages?.some((m) => m.msgId === msgId)) {
+      // Mesaj henüz listede değil; durumu sakla, eklenince uygulanır.
+      pendingStatus.set(msgId, status);
+      return;
+    }
 
     useChatStore.setState({
       byDevice: {
         ...state.byDevice,
-        [deviceId]: messages.map((m) => (m.msgId === msgId ? { ...m, status } : m)),
+        [deviceId]: messages.map((m) =>
+          m.msgId === msgId ? { ...m, status: laterStatus(m.status, status) } : m,
+        ),
       },
     });
   }).then(track);

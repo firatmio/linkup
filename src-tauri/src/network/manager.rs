@@ -276,7 +276,7 @@ impl ConnectionManager {
         loop {
             let result = tokio::select! {
                 message = outgoing.recv() => match message {
-                    Some(message) => write_frame(&mut parts.send, &message).await.map(|_| true),
+                    Some(message) => self.write_outgoing(&mut parts, device_id, message).await,
                     // Kanal kapandı: bağlantı sahipliği bırakılıyor.
                     None => break,
                 },
@@ -300,6 +300,37 @@ impl ConnectionManager {
         }
 
         parts.close();
+    }
+
+    /// Giden bir çerçeveyi yazar.
+    ///
+    /// Sohbet mesajının durumu ancak BURADA `sent`e ilerler: kuyruğa alınmış
+    /// olmak gönderilmiş olmak değildir. Bağlantı ölmüş ama henüz fark
+    /// edilmemişse (QUIC idle timeout'u 20 sn) mesaj kuyrukta kalır ve
+    /// kullanıcıya "gönderildi" demek yanlış olur.
+    async fn write_outgoing(
+        &self,
+        parts: &mut PeerParts,
+        device_id: [u8; 32],
+        message: ControlMessage,
+    ) -> Result<bool, super::protocol::WireError> {
+        let chat_msg_id = match &message {
+            ControlMessage::Chat(chat) => Some(chat.msg_id.clone()),
+            _ => None,
+        };
+
+        write_frame(&mut parts.send, &message).await?;
+
+        if let Some(msg_id) = chat_msg_id {
+            let _ = crate::chat::apply_status(
+                &self.db,
+                &self.app,
+                &device_id,
+                &[msg_id],
+                MessageStatus::Sent,
+            );
+        }
+        Ok(true)
     }
 
     /// Gelen bir kontrol mesajını işler. `Ok(false)` bağlantının kapatılması
@@ -359,6 +390,33 @@ impl ConnectionManager {
         }
 
         Ok(true)
+    }
+
+    /// Bağlantı koptuğunda kuyrukta kalan mesajlar artık gitmeyecektir;
+    /// kullanıcı bunu dönen saat ikonuna bakarak tahmin etmek zorunda kalmamalı.
+    fn fail_pending(&self, device_id: &[u8; 32]) {
+        let Ok(conn) = self.db.get() else { return };
+        let Ok(failed) = crate::db::messages::fail_pending_for_device(&conn, device_id) else {
+            return;
+        };
+        if failed.is_empty() {
+            return;
+        }
+
+        tracing::info!(
+            count = failed.len(),
+            "bağlantı koptu, bekleyen mesajlar başarısız"
+        );
+        for msg_id in failed {
+            let _ = self.app.emit(
+                crate::chat::EVENT_STATUS,
+                crate::chat::StatusEvent {
+                    device_id: crate::chat::encode_device_id(device_id),
+                    msg_id,
+                    status: MessageStatus::Failed.as_str().to_string(),
+                },
+            );
+        }
     }
 
     fn emit_presence(&self) {
