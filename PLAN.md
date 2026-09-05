@@ -91,22 +91,32 @@ P2P'de CA yoktur. Doğrulama zinciri şöyle kurulur:
 
 > Bu tasarımın sonucu: pairing tamamlandıktan sonra kimlik doğrulaması tamamen TLS katmanında halledilir. Protokol seviyesinde ayrıca imza/challenge taşımaya gerek kalmaz.
 
-#### 2.2.2 Performans ayarları (varsayılanlar LAN için yetersizdir)
+#### 2.2.2 Akış kontrolü ve canlılık ayarları
 
-`quinn::TransportConfig` üzerinde baştan ayarlanacak:
+> **Bu bölüm Faz 2'de ölçümle düzeltildi.** İlk hâli "varsayılan pencereler gigabit LAN'da darboğazdır" diyordu. Ölçüm bunu doğrulamadı: aynı test tuning'li **2203 Mbit/s**, tuning'siz **2204 Mbit/s** verdi. Loopback'te darboğaz pencereler değil **CPU**'dur. Ayrıca ilk tablodaki `receive_window = 32 MB`, quinn'in varsayılanına (pratikte sınırsız) göre bir *düşürme*ydi ve `max_concurrent_bidi_streams = 64` de varsayılan 100'ün altındaydı. Değerler korundu ama gerekçeleri dürüstçe yeniden yazıldı — hiçbiri "daha hızlı olsun diye" konmuş değil.
 
-| Ayar | Değer | Gerekçe |
-|---|---|---|
-| `stream_receive_window` | 8 MB | Varsayılan (~1 MB) gigabit LAN'da tek başına darboğaz |
-| `receive_window` | 32 MB | Bağlantı geneli pencere |
-| `send_window` | 32 MB | |
-| `max_concurrent_bidi_streams` | 64 | |
-| `keep_alive_interval` | 5 sn | NAT/router timeout'una karşı |
-| `max_idle_timeout` | 20 sn | Kopma tespiti |
-| UDP socket buffer | 4 MB (SO_SNDBUF / SO_RCVBUF) | OS seviyesinde ayrıca artırılmalı |
-| GSO/GRO | quinn varsayılanı açık bırakılır | Syscall başına daha çok veri |
+`quinn::TransportConfig` üzerinde ayarlananlar:
 
-**Faz 2'de zorunlu benchmark:** LAN'da tek dosya throughput'u ölçülüp dokümante edilecek. Hedef: gigabit ağda ≥ 400 Mbit/s. Hedefe ulaşılamazsa transfer fazına geçmeden önce tuning yapılır.
+| Ayar | quinn varsayılanı | LinkUp | Gerekçe |
+|---|---|---|---|
+| `stream_receive_window` | 1,25 MB | 8 MB | Tek akışın yüksek gecikmeli yolda (v2'de relay üzerinden internet) pencereye takılmaması. LAN'da fark yaratmaz, zararı da yok |
+| `receive_window` | pratikte sınırsız | 32 MB | **Hız değil bellek sınırı.** Sınırsız bırakılırsa kötü niyetli bir eş çok sayıda akış açıp keyfi miktarda tamponlatabilir |
+| `send_window` | 10 MB | 32 MB | Gönderim tarafında karşılık gelen tampon |
+| `max_concurrent_bidi_streams` | 100 | 64 | **DoS sınırı.** Tasarım gereği bağlantı başına 1 kontrol akışı kullanılıyor (§2.2.3) |
+| `keep_alive_interval` | kapalı | 5 sn | NAT/router eşleşmeleri zaman aşımına uğramasın — v2'nin ön koşulu |
+| `max_idle_timeout` | — | 20 sn | Kopma tespiti; keep-alive'ın belirgin şekilde üstünde olmalı |
+
+Son iki satırdaki ilişki (`keep_alive * 2 < max_idle`) ve `receive_window ≥ 3 × stream_receive_window` (eşzamanlı 3 transfer, §2.7.4) **derleme zamanı `const assert`'leri** ile korunuyor: sessizce gevşetilemezler.
+
+**Ölçüm sonucu (Faz 2, loopback, release):**
+
+| | |
+|---|---|
+| Aktarılan | 512 MiB, tek unidirectional stream |
+| Hız | **263 MiB/s ≈ 2203 Mbit/s** |
+| Hedef | ≥ 400 Mbit/s ✔ |
+
+**Ölçümün sınırı:** Loopback gerçek bir NIC değil; ölçtüğü şey yığınımızın CPU tavanıdır. Bu sayı "gigabit LAN'da 2 Gbit/s alırız" demek değildir — gigabit hattın kendisi 1 Gbit/s ile sınırlı. Anlamı şudur: **QUIC/TLS/çerçeveleme katmanımız gigabit hattı doyurabilecek kadar hızlı, darboğaz orada değil.** Gerçek LAN ölçümü Faz 7'de (dosya transferi) gerçek donanımla yapılacak.
 
 #### 2.2.3 Stream stratejisi
 
@@ -635,7 +645,7 @@ Tek yönlü PIN girişi, PIN gerçek bir PAKE (SPAKE2) olarak kullanılmadıkça
 `sqlx`'in async'i cazip ama compile-time query makroları `DATABASE_URL` ortam değişkeni bağımlılığı ve CI sürtünmesi getiriyor. Gömülü SQLite'ta gerçek async I/O zaten yok; `spawn_blocking` ile `rusqlite` pratikte eşdeğer performans, daha az sürtünme. FTS5'in `bundled` derlemede etkin olduğu Faz 1'de doğrulanacak.
 
 **K4 — Transferde paralel chunk yok; dosya başına tek sıralı stream var.**
-Tek bir QUIC bağlantısındaki tüm stream'ler aynı congestion controller'ı paylaşır; chunk'ları paralel stream'lere bölmek throughput artırmaz. Gerçek hız, pencere/buffer tuning'inden gelir (§2.2.2). Yan fayda: resume, chunk bitmap'i yerine tek byte offset'ine indirgenir — belirgin bir sadeleşme.
+Tek bir QUIC bağlantısındaki tüm stream'ler aynı congestion controller'ı paylaşır; chunk'ları paralel stream'lere bölmek throughput artırmaz. Gerçek hız, pencere/buffer tuning'inden gelir — sanılmıştı; **Faz 2 ölçümü bunu da düzeltti**: loopback'te darboğaz CPU, tuning'in ölçülebilir etkisi yok (§2.2.2). Yan fayda: resume, chunk bitmap'i yerine tek byte offset'ine indirgenir — belirgin bir sadeleşme.
 
 **K5 — Chunk başına hash yok; dosya sonunda tek blake3 var.**
 QUIC/TLS 1.3 her byte'ı authenticated encryption ile korur; ağ kaynaklı bozulma stream'e ulaşamaz. Chunk hash'i yalnızca CPU tüketir. Doğrulanması gereken tek şey, resume sonrası dosyanın doğru birleşmesidir.

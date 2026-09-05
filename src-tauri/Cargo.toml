@@ -32,10 +32,17 @@ tracing-appender = "0.2.5"
 r2d2 = "0.8.10"
 getrandom = "0.4.3"
 data-encoding = "2.11.1"
-ed25519-dalek = "3.0.0"
+ed25519-dalek = { version = "3.0.0", features = ["alloc", "pkcs8"] }
 r2d2_sqlite = { version = "0.35.0", features = ["bundled"] }
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 keyring = { version = "4.2.0", features = ["apple-native-keyring-store"] }
+quinn = "0.11.11"
+rustls = { version = "0.23.43", default-features = false, features = ["ring", "std"] }
+rcgen = "0.14.10"
+postcard = { version = "1.1.3", features = ["use-std"] }
+x509-parser = "0.18.1"
+rustls-pki-types = "1.15.1"
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "time", "io-util", "sync"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

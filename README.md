@@ -7,13 +7,26 @@ Ayrıntılı mimari, protokol tasarımı ve faz planı için: [PLAN.md](PLAN.md)
 
 ## Durum
 
-**Faz 1 — Kimlik + Veritabanı tamamlandı.**
+**Faz 2 — QUIC transport tamamlandı.**
 
 - Faz 0: navigasyon, tema, i18n, loglama, çok-profilli geliştirme kurulumu
 - Faz 1: SQLite şeması + migration altyapısı, kalıcı ayarlar, Ed25519 cihaz
   kimliği (OS keychain'de saklanır), fingerprint görüntüleme
+- Faz 2: QUIC uç noktası, kimlikten türetilen TLS sertifikası + public key
+  pinlemesi, `Hello` sürüm anlaşması, heartbeat
 
-Ağ katmanı (QUIC), keşif (mDNS), eşleştirme ve transfer henüz yok.
+Keşif (mDNS), eşleştirme ve dosya transferi henüz yok — uygulama uç noktayı
+açıyor ve gelen bağlantılarla el sıkışıyor, ama bağlanacak adresi Faz 3
+sağlayacak.
+
+### Ölçüm
+
+Loopback throughput (512 MiB, release): **263 MiB/s ≈ 2203 Mbit/s** — hedef
+≥400 Mbit/s. Ayrıntı ve ölçümün sınırları: [PLAN.md §2.2.2](PLAN.md).
+
+```bash
+cd src-tauri && cargo test --release -- --ignored --nocapture throughput
+```
 
 ## Gereksinimler
 

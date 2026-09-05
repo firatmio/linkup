@@ -4,12 +4,30 @@ mod db;
 mod error;
 mod identity;
 mod logging;
+mod network;
 mod paths;
 mod state;
 
 use cli::Cli;
 use paths::AppPaths;
 use state::AppState;
+
+/// Ağda görünecek cihaz adı. Ayarlardan özelleştirilebilir olacak (Faz 11);
+/// şimdilik makine adı, profil varsa onunla ayrıştırılır.
+fn default_device_name(paths: &AppPaths) -> String {
+    let host = hostname().unwrap_or_else(|| "LinkUp".to_string());
+    match &paths.profile {
+        Some(profile) => format!("{host} ({})", profile.to_uppercase()),
+        None => host,
+    }
+}
+
+fn hostname() -> Option<String> {
+    std::env::var("COMPUTERNAME")
+        .or_else(|_| std::env::var("HOSTNAME"))
+        .ok()
+        .filter(|name| !name.trim().is_empty())
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -20,9 +38,6 @@ pub fn run() {
     // Guard, uygulama kapanana kadar yaşamalı — düşerse log yazımı durur.
     let _log_guard = logging::init(&paths, cli.log_level.as_deref());
 
-    let db = db::open(&paths.db_path).expect("veritabanı açılamadı");
-    let identity = identity::load_or_create(&paths).expect("cihaz kimliği hazırlanamadı");
-
     let window_title = match &paths.profile {
         Some(p) => format!("LinkUp ({})", p.to_uppercase()),
         None => "LinkUp".to_string(),
@@ -30,12 +45,28 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .manage(AppState::new(paths, db, identity))
         .setup(move |app| {
             use tauri::Manager;
+
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_title(&window_title);
             }
+
+            let db = db::open(&paths.db_path)?;
+            let identity = identity::load_or_create(&paths)?;
+            let device_name = default_device_name(&paths);
+
+            // QUIC uç noktası tokio runtime bağlamı ister; `setup` ana thread'de
+            // ve runtime'ın DIŞINDA çalıştığı için açılış block_on içine alınır.
+            let network = tauri::async_runtime::block_on(async {
+                network::service::NetworkService::start(
+                    identity.signing_key(),
+                    device_name,
+                    paths.quic_port,
+                )
+            })?;
+
+            app.manage(AppState::new(paths, db, identity, network));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
