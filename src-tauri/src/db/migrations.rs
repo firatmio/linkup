@@ -17,11 +17,18 @@ struct Migration {
 }
 
 /// Sıra ÖNEMLİ: yeni migration'lar sona eklenir, mevcutlar asla değiştirilmez.
-const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    name: "initial",
-    sql: include_str!("../../migrations/001_initial.sql"),
-}];
+const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        name: "initial",
+        sql: include_str!("../../migrations/001_initial.sql"),
+    },
+    Migration {
+        version: 2,
+        name: "device_auto_accept",
+        sql: include_str!("../../migrations/002_device_auto_accept.sql"),
+    },
+];
 
 pub fn run(conn: &mut Connection) -> rusqlite::Result<()> {
     let current: i32 = conn.query_row("PRAGMA user_version", [], |row| row.get(0))?;

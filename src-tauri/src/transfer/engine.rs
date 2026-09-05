@@ -263,14 +263,26 @@ pub async fn handle_offer(
 
     // Kabul politikası (PLAN.md §2.13.3). Eşleşmemiş cihazdan buraya zaten
     // gelinemez: eşleşmemiş bağlantılar yalnızca eşleştirme mesajı gönderebilir.
-    let needs_approval = match settings.accept_policy.as_str() {
-        // Güvenilir cihazdan gelen her dosya sorulmadan alınır.
-        "trusted" => false,
-        // Yalnızca eşiğin üstündekiler sorulur.
-        "threshold" => offer.size > settings.accept_size_threshold,
-        // Varsayılan: her dosya için sor.
-        _ => true,
-    };
+    // Cihaz "güvenli" işaretliyse hiç sorulmaz (kullanıcı isteği). Karar
+    // cihaz bazındadır: bir cihaza güvenmek hepsine güvenmek değildir.
+    let device_trusted = ctx
+        .db
+        .get()
+        .ok()
+        .and_then(|conn| crate::db::devices::get(&conn, device_id).ok())
+        .flatten()
+        .map(|device| device.auto_accept)
+        .unwrap_or(false);
+
+    let needs_approval = !device_trusted
+        && match settings.accept_policy.as_str() {
+            // Eşleşmiş her cihazdan gelen dosya sorulmadan alınır.
+            "trusted" => false,
+            // Yalnızca eşiğin üstündekiler sorulur.
+            "threshold" => offer.size > settings.accept_size_threshold,
+            // Varsayılan: her dosya için sor.
+            _ => true,
+        };
 
     if needs_approval && !ask_user(ctx, device_id, device_name, offer).await {
         return reject(RejectReason::Declined);

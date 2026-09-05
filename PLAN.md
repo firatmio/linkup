@@ -247,6 +247,8 @@ PIN girme yerine **her iki cihazda da aynı kodu gösterip kullanıcıya onaylat
 
 #### 2.7.2 Resume
 
+> **Uygulama durumu (Faz 7):** Resume makinesi kuruldu — `.part` dosyası, offset takibi, `FileAccept { start_offset }` ve dosya sonu blake3 doğrulaması çalışıyor; alıcı, aynı `transfer_id` ile gelen bir teklifi kaldığı yerden kabul ediyor. Ama **kesintiden sonra teklifi yeniden gönderen bir mekanizma henüz yok**: bağlantı koptuğunda transfer başarısız işaretleniyor ve kullanıcı dosyayı elle yeniden göndermek zorunda; bu da yeni bir `transfer_id` ürettiği için baştan başlıyor. Otomatik yeniden teklif Faz 11'de (cilalama) tamamlanacak.
+
 - Transfer başında `transfers` tablosuna kayıt açılır: `transfer_id`, dosya adı, boyut, beklenen hash, `bytes_done`, `part_path`, durum.
 - Sıralı akış sayesinde resume durumu **tek bir byte offset**'idir — chunk bitmap'i gerekmez.
 - Kopma sonrası yeniden bağlanınca: gönderen aynı `transfer_id` ile `FileOffer { is_resume: true }` yollar; alıcı `.part` dosyasının boyutunu okuyup `FileAccept { start_offset }` ile bildirir.
@@ -389,6 +391,8 @@ Karşı taraf keyfi bir `file_name` gönderebilir. `FileOffer` işlenirken:
 | **Her zaman sor** (varsayılan) | Her dosya için kullanıcı onayı istenir |
 | Boyut eşiğiyle | Eşiğin (varsayılan 100 MB) altı otomatik, üstü onay ister |
 | Güvenilir cihazlardan otomatik kabul | Eşleşmiş cihazlardan gelen dosyalar sorulmadan indirilir |
+
+**Cihaz başına güven (kullanıcı isteği):** Sohbet başlığındaki üç nokta menüsünden açılan cihaz kartında bir "Güvenli cihaz" anahtarı bulunur. Açıkken o cihazdan gelen dosyalar onay sorulmadan kabul edilir. Karar cihaz bazındadır ve varsayılan kapalıdır — bir cihaza güvenmek hepsine güvenmek değildir. Bu işaret, genel kabul politikasının ÖNÜNDE gelir.
 
 > **Varsayılan neden "sor":** eşleşme bir güven kararıdır ama sınırsız yazma yetkisi değil. Kullanıcı ne aldığını bilmeli. Onay 60 saniye içinde gelmezse teklif reddedilir — karşı tarafı süresiz bekletmek hem bağlantıyı hem göndericinin dosyasını rehin tutmak olurdu.
 >

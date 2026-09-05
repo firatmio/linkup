@@ -1,7 +1,9 @@
-import { FolderDown } from "lucide-react";
+import { FolderDown, Trash2 } from "lucide-react";
 import { t } from "../../i18n";
 import { PageHeader, EmptyState, Card, SectionTitle } from "../../components/Surface";
 import { Callout } from "../../components/Callout";
+import { Button } from "../../components/Button";
+import { api } from "../../lib/tauri";
 import { useTransferStore } from "../../stores/transferStore";
 import { TransferRow } from "./TransferRow";
 
@@ -11,6 +13,12 @@ export function IncomingFilesPage() {
   const active = useTransferStore((s) => s.active);
   const progress = useTransferStore((s) => s.progress);
   const error = useTransferStore((s) => s.error);
+  const reload = useTransferStore((s) => s.load);
+
+  const clearFinished = async () => {
+    await api.clearFinishedTransfers();
+    await reload();
+  };
 
   return (
     <>
@@ -18,8 +26,17 @@ export function IncomingFilesPage() {
         title={t("files.title")}
         action={
           incoming.length > 0 ? (
-            <span className="text-[length:var(--lu-text-caption)] text-fg-secondary">
-              {t("files.count", { count: incoming.length })}
+            <span className="flex items-center gap-3">
+              <span className="text-[length:var(--lu-text-caption)] text-fg-secondary">
+                {t("files.count", { count: incoming.length })}
+              </span>
+              <Button
+                variant="subtle"
+                icon={<Trash2 size={16} />}
+                onClick={() => void clearFinished()}
+              >
+                {t("transfers.clear")}
+              </Button>
             </span>
           ) : undefined
         }

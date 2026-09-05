@@ -69,11 +69,11 @@ pub fn run() {
                         tracing::info!(count, "yolda kalmış mesajlar başarısız işaretlendi");
                     }
                 }
-                // Yarım kalan transferler duraklatılmış sayılır: `.part`
-                // dosyaları durduğu için devam ettirilebilirler.
-                if let Ok(count) = db::transfers::pause_stuck(&conn) {
+                // Yarım kalan transferler başarısız sayılır: yeniden başlatma
+                // sonrası kimse teklifi tekrar göndermiyor.
+                if let Ok(count) = db::transfers::fail_stale(&conn) {
                     if count > 0 {
-                        tracing::info!(count, "yarım kalan transferler duraklatıldı");
+                        tracing::info!(count, "yarım kalan transferler başarısız işaretlendi");
                     }
                 }
             }
@@ -154,6 +154,8 @@ pub fn run() {
             commands::mark_conversation_read,
             commands::send_file,
             commands::respond_to_transfer,
+            commands::set_device_auto_accept,
+            commands::clear_finished_transfers,
             commands::incoming_files,
             commands::active_transfers,
             commands::open_transfer_file,

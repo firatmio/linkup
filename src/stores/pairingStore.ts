@@ -26,6 +26,7 @@ interface PairingState {
   start: (deviceId: string) => Promise<void>;
   respond: (accept: boolean) => Promise<void>;
   forget: (deviceId: string) => Promise<void>;
+  setAutoAccept: (deviceId: string, enabled: boolean) => Promise<void>;
   dismissMessage: () => void;
 }
 
@@ -81,6 +82,21 @@ export const usePairingStore = create<PairingState>((set, get) => ({
   forget: async (deviceId) => {
     await api.forgetDevice(deviceId);
     await get().loadTrusted();
+  },
+
+  setAutoAccept: async (deviceId, enabled) => {
+    // İyimser güncelleme: anahtar anında tepki vermeli, sonuç olayla doğrulanır.
+    set((state) => ({
+      trusted: state.trusted.map((device) =>
+        device.id === deviceId ? { ...device, autoAccept: enabled } : device,
+      ),
+    }));
+    try {
+      await api.setDeviceAutoAccept(deviceId, enabled);
+    } catch (err) {
+      set({ message: translateError(err), messageIsError: true });
+      await get().loadTrusted();
+    }
   },
 
   dismissMessage: () => set({ message: null, messageIsError: false }),

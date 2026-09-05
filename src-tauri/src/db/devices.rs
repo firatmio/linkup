@@ -16,6 +16,8 @@ pub struct TrustedDevice {
     pub last_address: Option<String>,
     pub last_seen: Option<i64>,
     pub paired_at: i64,
+    /// Açıkken bu cihazdan gelen dosyalar onay sorulmadan kabul edilir.
+    pub auto_accept: bool,
 }
 
 impl TrustedDevice {
@@ -39,6 +41,7 @@ pub struct TrustedDeviceDto {
     pub last_address: Option<String>,
     pub paired_at: i64,
     pub online: bool,
+    pub auto_accept: bool,
     /// Sohbet listesinde gösterilecek son mesaj özeti.
     pub last_message: Option<String>,
     pub last_message_at: Option<i64>,
@@ -85,7 +88,7 @@ pub fn touch(conn: &Connection, device_id: &[u8; 32], address: &str) -> AppResul
 
 pub fn list(conn: &Connection) -> AppResult<Vec<TrustedDevice>> {
     let mut stmt = conn.prepare(
-        "SELECT device_id, name, alias, last_ip, last_seen, paired_at
+        "SELECT device_id, name, alias, last_ip, last_seen, paired_at, auto_accept
          FROM trusted_devices ORDER BY name COLLATE NOCASE",
     )?;
     let rows = stmt.query_map([], row_to_device)?;
@@ -94,7 +97,7 @@ pub fn list(conn: &Connection) -> AppResult<Vec<TrustedDevice>> {
 
 pub fn get(conn: &Connection, device_id: &[u8; 32]) -> AppResult<Option<TrustedDevice>> {
     let mut stmt = conn.prepare(
-        "SELECT device_id, name, alias, last_ip, last_seen, paired_at
+        "SELECT device_id, name, alias, last_ip, last_seen, paired_at, auto_accept
          FROM trusted_devices WHERE device_id = ?1",
     )?;
     Ok(stmt
@@ -104,6 +107,19 @@ pub fn get(conn: &Connection, device_id: &[u8; 32]) -> AppResult<Option<TrustedD
 
 pub fn is_trusted(conn: &Connection, device_id: &[u8; 32]) -> AppResult<bool> {
     Ok(get(conn, device_id)?.is_some())
+}
+
+/// "Güvenli cihaz" işaretini değiştirir (kullanıcı isteği).
+///
+/// Açıkken bu cihazdan gelen dosyalar onay sorulmadan kabul edilir. Karar
+/// cihaz bazındadır: kullanıcının kendi dizüstüne güvenmesi, tüm cihazlara
+/// güvendiği anlamına gelmez.
+pub fn set_auto_accept(conn: &Connection, device_id: &[u8; 32], enabled: bool) -> AppResult<()> {
+    conn.execute(
+        "UPDATE trusted_devices SET auto_accept = ?2 WHERE device_id = ?1",
+        rusqlite::params![device_id.as_slice(), i64::from(enabled)],
+    )?;
+    Ok(())
 }
 
 /// Cihazı unutur. Mesajları ve senkronize klasörleri de foreign key zinciriyle
@@ -132,6 +148,7 @@ fn row_to_device(row: &rusqlite::Row<'_>) -> rusqlite::Result<TrustedDevice> {
         last_address: row.get(3)?,
         last_seen: row.get(4)?,
         paired_at: row.get(5)?,
+        auto_accept: row.get::<_, i64>(6)? != 0,
     })
 }
 
@@ -148,6 +165,7 @@ mod tests {
             last_address: None,
             last_seen: None,
             paired_at: 0,
+            auto_accept: false,
         }
     }
 
@@ -258,6 +276,37 @@ mod tests {
 
         let names: Vec<_> = list(&conn).unwrap().into_iter().map(|d| d.name).collect();
         assert_eq!(names, ["ali", "Bora", "Cem"]);
+    }
+
+    #[test]
+    fn guvenli_cihaz_isareti_varsayilan_kapali() {
+        let pool = db::open_in_memory().unwrap();
+        let conn = pool.get().unwrap();
+        upsert(&conn, &[1; 32], "A", None).unwrap();
+
+        assert!(
+            !get(&conn, &[1; 32]).unwrap().unwrap().auto_accept,
+            "güven varsayılan olarak verilmemeli"
+        );
+
+        set_auto_accept(&conn, &[1; 32], true).unwrap();
+        assert!(get(&conn, &[1; 32]).unwrap().unwrap().auto_accept);
+
+        set_auto_accept(&conn, &[1; 32], false).unwrap();
+        assert!(!get(&conn, &[1; 32]).unwrap().unwrap().auto_accept);
+    }
+
+    /// Yeniden eşleşme, kullanıcının verdiği güveni sıfırlamamalı.
+    #[test]
+    fn yeniden_eslesme_guven_isaretini_korur() {
+        let pool = db::open_in_memory().unwrap();
+        let conn = pool.get().unwrap();
+
+        upsert(&conn, &[1; 32], "A", None).unwrap();
+        set_auto_accept(&conn, &[1; 32], true).unwrap();
+
+        upsert(&conn, &[1; 32], "A yeni ad", None).unwrap();
+        assert!(get(&conn, &[1; 32]).unwrap().unwrap().auto_accept);
     }
 
     #[test]

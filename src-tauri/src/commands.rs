@@ -2,7 +2,7 @@
 //! Frontend ağ veya dosya sistemiyle doğrudan konuşmaz; her şey buradan geçer.
 
 use serde::Serialize;
-use tauri::State;
+use tauri::{Emitter, State};
 
 use crate::db::devices::TrustedDeviceDto;
 use crate::db::messages::{self, Message, MessageStatus};
@@ -135,6 +135,7 @@ pub fn trusted_devices(state: State<'_, AppState>) -> Vec<TrustedDeviceDto> {
                 last_address: device.last_address.clone(),
                 paired_at: device.paired_at,
                 online: state.connections.presence.is_online(&device.device_id),
+                auto_accept: device.auto_accept,
                 last_message: last.as_ref().map(|m| m.content.clone()),
                 last_message_at: last.as_ref().map(|m| m.sent_at),
                 unread: conn
@@ -285,6 +286,37 @@ pub async fn send_file(state: State<'_, AppState>, id: String, path: String) -> 
         return Err(AppError::Unreachable("cihaz bağlı değil".to_string()));
     }
     Ok(transfer_id)
+}
+
+/// Cihazın "güvenli cihaz" işaretini değiştirir.
+///
+/// Açıkken o cihazdan gelen dosyalar onay sorulmadan kabul edilir.
+#[tauri::command]
+pub fn set_device_auto_accept(
+    state: State<'_, AppState>,
+    id: String,
+    enabled: bool,
+) -> AppResult<()> {
+    let device_id = parse_device_id(&id)?;
+    let conn = state.db.get().map_err(pool_error)?;
+    crate::db::devices::set_auto_accept(&conn, &device_id, enabled)?;
+    state.pairing.emit_devices_changed();
+    Ok(())
+}
+
+/// Sonlanmış aktarımları listeden temizler.
+///
+/// Tamamlanan ve başarısız kayıtlar birikir; kullanıcı listeyi
+/// temizleyebilmeli. Dosyalar silinmez, yalnızca kayıt düşer.
+#[tauri::command]
+pub fn clear_finished_transfers(state: State<'_, AppState>) -> AppResult<usize> {
+    let conn = state.db.get().map_err(pool_error)?;
+    let cleared = transfers::clear_finished(&conn)?;
+    let _ = state
+        .transfers
+        .app
+        .emit(crate::transfer::engine::EVENT_CHANGED, ());
+    Ok(cleared)
 }
 
 /// Kullanıcının dosya kabul kararını akışa iletir (PLAN.md §2.13.3).

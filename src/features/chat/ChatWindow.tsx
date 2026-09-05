@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Send, MessageSquare, Monitor, Paperclip } from "lucide-react";
+import { Send, MessageSquare, Monitor, Paperclip, MoreHorizontal } from "lucide-react";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { t } from "../../i18n";
@@ -9,6 +9,7 @@ import { MessageBubble } from "./MessageBubble";
 import { useChatStore } from "../../stores/chatStore";
 import { useTransferStore } from "../../stores/transferStore";
 import { TransferRow } from "../transfer/TransferRow";
+import { DeviceInfoDialog } from "../devices/DeviceInfoDialog";
 import type { ChatMessage, TrustedDevice } from "../../lib/tauri";
 
 /** ``` içeren mesaj kod bloğu sayılır (PLAN.md §3.3). */
@@ -50,6 +51,7 @@ export function ChatWindow({ device }: { device: TrustedDevice }) {
   const send = useChatStore((s) => s.send);
 
   const [dropActive, setDropActive] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
   const sendFile = useTransferStore((s) => s.send);
   const activeTransfers = useTransferStore((s) => s.active);
   const progress = useTransferStore((s) => s.progress);
@@ -132,7 +134,19 @@ export function ChatWindow({ device }: { device: TrustedDevice }) {
             {t(device.online ? "status.online" : "status.offline")}
           </span>
         </span>
+
+        <button
+          type="button"
+          onClick={() => setInfoOpen(true)}
+          aria-label={t("device.info")}
+          title={t("device.info")}
+          className="ml-auto shrink-0 rounded-lu-sm p-1.5 text-fg-secondary transition-colors hover:bg-hover hover:text-fg active:bg-press"
+        >
+          <MoreHorizontal size={18} />
+        </button>
       </header>
+
+      <DeviceInfoDialog device={device} open={infoOpen} onClose={() => setInfoOpen(false)} />
 
       <div ref={scrollRef} className="relative flex-1 overflow-y-auto py-4">
         {dropActive ? (

@@ -30,6 +30,15 @@ export const tr = {
   "addDevice.connecting": "Bağlanılıyor…",
   "device.forget": "Listeden çıkar",
   "device.pair": "Eşleştir",
+  "device.info": "Cihaz bilgileri",
+  "device.info.address": "Adres",
+  "device.info.pairedAt": "Eşleşme",
+  "device.info.fingerprint": "Kimlik parmak izi",
+  "device.info.unknown": "bilinmiyor",
+  "device.trusted.title": "Güvenli cihaz",
+  "device.trusted.desc": "Bu cihazdan gelen dosyalar onay sorulmadan kabul edilir",
+  "device.trusted.warning":
+    "Bu cihaz artık size onay sormadan dosya gönderebilir. Yalnızca kendi cihazlarınız için açın.",
 
   // Eşleştirme
   "pairing.title": "Cihazı Eşleştir",
@@ -92,6 +101,7 @@ export const tr = {
   "chats.attach": "Dosya gönder",
   "chats.dropHere": "Göndermek için bırakın",
   "transfers.title": "Aktarımlar",
+  "transfers.clear": "Tamamlananları temizle",
   "transfers.request.title": "Dosya Gönderme İsteği",
   "transfers.request.body": "{device} size bir dosya göndermek istiyor.",
   "transfers.request.accept": "Kabul Et",
@@ -159,6 +169,7 @@ export const tr = {
 
   // Genel
   "common.loading": "Yükleniyor…",
+  "common.close": "Kapat",
   "common.comingSoon": "Bu bölüm sonraki fazlarda geliyor.",
 
   // Hata kodları — Rust tarafındaki AppError::code() ile birebir eşleşir.

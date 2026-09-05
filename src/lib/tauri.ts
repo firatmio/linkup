@@ -65,6 +65,8 @@ export interface TrustedDevice {
   lastAddress: string | null;
   pairedAt: number;
   online: boolean;
+  /** Açıkken bu cihazdan gelen dosyalar onay sorulmadan kabul edilir. */
+  autoAccept: boolean;
   /** Sohbet listesinde gösterilen son mesaj özeti. */
   lastMessage: string | null;
   lastMessageAt: number | null;
@@ -239,6 +241,9 @@ export const api = {
   respondToPairing: (sessionId: string, accept: boolean) =>
     invoke<boolean>("respond_to_pairing", { sessionId, accept }),
   forgetDevice: (id: string) => invoke<boolean>("forget_device", { id }),
+  setDeviceAutoAccept: (id: string, enabled: boolean) =>
+    invoke<void>("set_device_auto_accept", { id, enabled }),
+  clearFinishedTransfers: () => invoke<number>("clear_finished_transfers"),
   chatHistory: (id: string, limit?: number) =>
     invoke<ChatMessage[]>("chat_history", { id, limit }),
   sendMessage: (id: string, body: string, isCode?: boolean) =>

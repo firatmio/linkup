@@ -235,16 +235,34 @@ pub fn pause_for_device(conn: &Connection, device_id: &[u8; 32]) -> AppResult<Ve
     Ok(ids)
 }
 
-/// Uygulama kapanınca yarım kalan transferler `active` durumunda donar;
-/// açılışta duraklatılmış sayılırlar ki kullanıcı ilerlemeyen bir çubuğa
-/// bakmasın. `.part` dosyası durduğu için devam ettirilebilirler.
-pub fn pause_stuck(conn: &Connection) -> AppResult<usize> {
+/// Uygulama kapanınca yarım kalan transferler `active` durumunda donar.
+///
+/// Açılışta bunlar BAŞARISIZ sayılır, duraklatılmış değil. Sebebi dürüstlük:
+/// duraklatılmış bir transfer devam ettirilebilir olmalı, ama yeniden başlatma
+/// sonrası kimse teklifi tekrar göndermiyor — kullanıcıya "duraklatıldı"
+/// demek, hiç gelmeyecek bir devamı beklettirmek olurdu.
+pub fn fail_stale(conn: &Connection) -> AppResult<usize> {
     Ok(conn.execute(
-        "UPDATE transfers SET status = ?1 WHERE status IN (?2, ?3)",
+        "UPDATE transfers SET status = ?1, error = ?4, completed_at = ?5
+         WHERE status IN (?2, ?3)",
         rusqlite::params![
-            TransferStatus::Paused.as_str(),
+            TransferStatus::Failed.as_str(),
             TransferStatus::Active.as_str(),
             TransferStatus::Pending.as_str(),
+            "uygulama kapandığı için yarıda kaldı",
+            crate::db::devices::now(),
+        ],
+    )?)
+}
+
+/// Sonlanmış kayıtları listeden temizler. Dosyalar silinmez.
+pub fn clear_finished(conn: &Connection) -> AppResult<usize> {
+    Ok(conn.execute(
+        "DELETE FROM transfers WHERE status IN (?1, ?2, ?3)",
+        rusqlite::params![
+            TransferStatus::Done.as_str(),
+            TransferStatus::Failed.as_str(),
+            TransferStatus::Cancelled.as_str(),
         ],
     )?)
 }
@@ -383,7 +401,7 @@ mod tests {
     }
 
     #[test]
-    fn yarim_kalan_transferler_acilista_duraklatilir() {
+    fn yarim_kalan_transferler_acilista_basarisiz_olur() {
         let pool = setup();
         let conn = pool.get().unwrap();
 
@@ -392,12 +410,35 @@ mod tests {
         insert(&conn, new("t2", true)).unwrap();
         set_status(&conn, "t2", TransferStatus::Done, None).unwrap();
 
-        assert_eq!(pause_stuck(&conn).unwrap(), 1);
-        assert_eq!(get(&conn, "t1").unwrap().unwrap().status, "paused");
+        assert_eq!(fail_stale(&conn).unwrap(), 1);
+
+        let stale = get(&conn, "t1").unwrap().unwrap();
+        assert_eq!(stale.status, "failed");
+        assert!(stale.error.is_some(), "sebebi kullanıcıya söylenmeli");
         assert_eq!(
             get(&conn, "t2").unwrap().unwrap().status,
             "done",
             "tamamlanmış transfere dokunulmamalı"
+        );
+    }
+
+    #[test]
+    fn sonlanmis_kayitlar_temizlenir() {
+        let pool = setup();
+        let conn = pool.get().unwrap();
+
+        insert(&conn, new("t1", true)).unwrap();
+        set_status(&conn, "t1", TransferStatus::Done, None).unwrap();
+        insert(&conn, new("t2", true)).unwrap();
+        set_status(&conn, "t2", TransferStatus::Failed, Some("hata")).unwrap();
+        insert(&conn, new("t3", true)).unwrap();
+        update_progress(&conn, "t3", 10).unwrap();
+
+        assert_eq!(clear_finished(&conn).unwrap(), 2);
+        assert!(get(&conn, "t1").unwrap().is_none());
+        assert!(
+            get(&conn, "t3").unwrap().is_some(),
+            "süren aktarım silinmemeli"
         );
     }
 
