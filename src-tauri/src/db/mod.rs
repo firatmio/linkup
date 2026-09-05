@@ -5,6 +5,7 @@
 //! `spawn_blocking` içine alınırlar.
 
 pub mod devices;
+pub mod messages;
 pub mod migrations;
 pub mod settings;
 

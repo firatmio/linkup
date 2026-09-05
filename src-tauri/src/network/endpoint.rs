@@ -334,9 +334,51 @@ impl PeerConnection {
         &self.connection
     }
 
+    pub fn close(&self) {
+        self.connection.close(VarInt::from_u32(0), b"kapaniyor");
+    }
+
+    /// Bağlantıyı bileşenlerine ayırır.
+    ///
+    /// Uzun ömürlü döngülerde gerekli: `&mut self` üzerinden hem okuyup hem
+    /// yazmak ödünç alma kurallarına takılır, dolayısıyla `select!` ile
+    /// eşzamanlı gönderim/alım yapılamaz. Parçalara ayrılınca akışların
+    /// sahipliği ayrışır.
+    pub fn into_parts(self) -> PeerParts {
+        PeerParts {
+            connection: self.connection,
+            send: self.control_send,
+            recv: self.control_recv,
+            peer: self.peer,
+            peer_device_id: self.peer_device_id,
+            local_device_id: self.local_device_id,
+        }
+    }
+}
+
+/// `PeerConnection`ın ayrılmış hâli.
+pub struct PeerParts {
+    pub connection: Connection,
+    pub send: SendStream,
+    pub recv: RecvStream,
+    pub peer: Hello,
+    pub peer_device_id: [u8; 32],
+    pub local_device_id: [u8; 32],
+}
+
+impl PeerParts {
+    pub fn close(&self) {
+        self.connection.close(VarInt::from_u32(0), b"kapaniyor");
+    }
+
+    pub fn remote_address(&self) -> SocketAddr {
+        self.connection.remote_address()
+    }
+
     /// Kontrol akışına bir mesaj yazar.
-    pub async fn send(&mut self, message: &ControlMessage) -> Result<(), NetworkError> {
-        write_frame(&mut self.control_send, message).await?;
+    /// (`send_frame`: alandaki `send` akışıyla ad çakışmasın.)
+    pub async fn send_frame(&mut self, message: &ControlMessage) -> Result<(), NetworkError> {
+        write_frame(&mut self.send, message).await?;
         Ok(())
     }
 
@@ -344,10 +386,9 @@ impl PeerConnection {
     pub async fn heartbeat(&mut self) -> Result<Duration, NetworkError> {
         let nonce = rand_nonce();
         let started = std::time::Instant::now();
+        write_frame(&mut self.send, &ControlMessage::Heartbeat { nonce }).await?;
 
-        write_frame(&mut self.control_send, &ControlMessage::Heartbeat { nonce }).await?;
-
-        match read_frame(&mut self.control_recv).await? {
+        match read_frame(&mut self.recv).await? {
             // Nonce eşleşmesi şart: eski bir yanıtı yeni bir yoklamanın cevabı
             // sanmak, ölü bir bağlantıyı canlı göstermeye yeter.
             ControlMessage::HeartbeatAck { nonce: echoed } if echoed == nonce => {
@@ -357,25 +398,17 @@ impl PeerConnection {
         }
     }
 
-    /// Kontrol stream'inden gelen bir mesajı işler. `Heartbeat` yerinde
-    /// yanıtlanır; diğerleri çağırana döner.
+    /// Kontrol akışından gelen bir mesajı döndürür.
+    /// `Heartbeat` yerinde yanıtlanır; çağırana ulaşmaz.
     pub async fn next_control_message(&mut self) -> Result<ControlMessage, NetworkError> {
         loop {
-            let message = read_frame(&mut self.control_recv).await?;
+            let message = read_frame(&mut self.recv).await?;
             if let ControlMessage::Heartbeat { nonce } = message {
-                write_frame(
-                    &mut self.control_send,
-                    &ControlMessage::HeartbeatAck { nonce },
-                )
-                .await?;
+                write_frame(&mut self.send, &ControlMessage::HeartbeatAck { nonce }).await?;
                 continue;
             }
             return Ok(message);
         }
-    }
-
-    pub fn close(&self) {
-        self.connection.close(VarInt::from_u32(0), b"kapaniyor");
     }
 }
 

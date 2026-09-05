@@ -65,6 +65,31 @@ export interface TrustedDevice {
   lastAddress: string | null;
   pairedAt: number;
   online: boolean;
+  /** Sohbet listesinde gösterilen son mesaj özeti. */
+  lastMessage: string | null;
+  lastMessageAt: number | null;
+  unread: number;
+}
+
+/** Sohbet mesajı (PLAN.md §2.8). */
+export interface ChatMessage {
+  msgId: string;
+  direction: "in" | "out";
+  contentType: "text" | "code" | "image" | "file_ref";
+  content: string;
+  sentAt: number;
+  status: "sending" | "sent" | "delivered" | "read" | "failed";
+}
+
+export interface IncomingMessageEvent {
+  deviceId: string;
+  message: ChatMessage;
+}
+
+export interface MessageStatusEvent {
+  deviceId: string;
+  msgId: string;
+  status: ChatMessage["status"];
 }
 
 /** Eşleştirme onayı istendiğinde gelen olay (PLAN.md §2.5). */
@@ -92,7 +117,21 @@ export const events = {
   devicesPresence: "devices:presence",
   pairingRequested: "pairing:requested",
   pairingFinished: "pairing:finished",
+  chatMessage: "chat:message",
+  chatStatus: "chat:status",
 } as const;
+
+export function onChatMessage(
+  handler: (event: IncomingMessageEvent) => void,
+): Promise<UnlistenFn> {
+  return listen<IncomingMessageEvent>(events.chatMessage, (e) => handler(e.payload));
+}
+
+export function onChatStatus(
+  handler: (event: MessageStatusEvent) => void,
+): Promise<UnlistenFn> {
+  return listen<MessageStatusEvent>(events.chatStatus, (e) => handler(e.payload));
+}
 
 export function onPairingRequested(
   handler: (request: PairingRequest) => void,
@@ -140,5 +179,11 @@ export const api = {
   respondToPairing: (sessionId: string, accept: boolean) =>
     invoke<boolean>("respond_to_pairing", { sessionId, accept }),
   forgetDevice: (id: string) => invoke<boolean>("forget_device", { id }),
+  chatHistory: (id: string, limit?: number) =>
+    invoke<ChatMessage[]>("chat_history", { id, limit }),
+  sendMessage: (id: string, body: string, isCode?: boolean) =>
+    invoke<ChatMessage>("send_message", { id, body, isCode }),
+  markConversationRead: (id: string) =>
+    invoke<number>("mark_conversation_read", { id }),
   openLogDir: () => invoke<void>("open_log_dir"),
 };

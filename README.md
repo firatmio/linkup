@@ -7,7 +7,7 @@ Ayrıntılı mimari, protokol tasarımı ve faz planı için: [PLAN.md](PLAN.md)
 
 ## Durum
 
-**Faz 4 — Eşleştirme tamamlandı.**
+**Faz 5 — Sohbet tamamlandı.**
 
 - Faz 0: navigasyon, tema, i18n, loglama, çok-profilli geliştirme kurulumu
 - Faz 1: SQLite şeması + migration altyapısı, kalıcı ayarlar, Ed25519 cihaz
@@ -17,9 +17,11 @@ Ayrıntılı mimari, protokol tasarımı ve faz planı için: [PLAN.md](PLAN.md)
 - Faz 3: mDNS ile otomatik cihaz keşfi, elle IP ekleme, "Bulunanlar" listesi
 - Faz 4: karşılıklı doğrulama koduyla (SAS) eşleştirme, güvenilir cihaz kaydı,
   pinlenmiş anahtarla otomatik yeniden bağlanma, "Cihazı Unut"
+- Faz 5: metin mesajlaşma, kalıcı geçmiş, iletildi/görüldü göstergesi,
+  syntax highlight'lı kod blokları
 
-Sohbet ve dosya transferi henüz yok — cihazlar eşleşiyor ve bağlı kalıyor,
-ama üzerinden veri akmıyor.
+Dosya transferi henüz yok. Sohbette görsel önizleme de transferle birlikte
+geliyor (bkz. PLAN.md Faz 7.5).
 
 ### Ölçüm
 

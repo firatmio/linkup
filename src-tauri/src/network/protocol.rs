@@ -44,6 +44,45 @@ pub enum ControlMessage {
     PairingConfirm,
     /// Kullanıcı reddetti veya süre doldu.
     PairingReject,
+    /// Sohbet mesajı (PLAN.md §2.8).
+    Chat(ChatMessage),
+    /// Mesaj karşı tarafa ulaştı.
+    ChatAck {
+        msg_id: String,
+    },
+    /// Karşı taraf mesajları görüntüledi.
+    ReadReceipt {
+        msg_ids: Vec<String>,
+    },
+}
+
+/// Sohbet mesajı gövdesi.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChatMessage {
+    /// UUID; iki uçta aynı kimlik kullanılır, böylece ack eşleştirilebilir.
+    pub msg_id: String,
+    pub content_type: ContentType,
+    pub body: String,
+    /// Gönderenin saatine göre Unix saniyesi. Yalnızca bilgi amaçlı:
+    /// sıralama alıcının kendi kaydına göre yapılır, karşı tarafın saatine
+    /// güvenilmez.
+    pub sent_at: i64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ContentType {
+    Text,
+    /// Fenced code block olarak yazılmış içerik.
+    Code,
+}
+
+impl ContentType {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ContentType::Text => "text",
+            ContentType::Code => "code",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -288,6 +327,17 @@ mod tests {
         assert_eq!(encode(&ControlMessage::PairingRequest), 5);
         assert_eq!(encode(&ControlMessage::PairingConfirm), 6);
         assert_eq!(encode(&ControlMessage::PairingReject), 7);
+        assert_eq!(
+            encode(&ControlMessage::Chat(ChatMessage {
+                msg_id: "x".into(),
+                content_type: ContentType::Text,
+                body: "merhaba".into(),
+                sent_at: 0,
+            })),
+            8
+        );
+        assert_eq!(encode(&ControlMessage::ChatAck { msg_id: "x".into() }), 9);
+        assert_eq!(encode(&ControlMessage::ReadReceipt { msg_ids: vec![] }), 10);
     }
 
     #[test]

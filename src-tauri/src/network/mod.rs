@@ -109,13 +109,13 @@ mod tests {
 
         let addr = b.local_addr().unwrap();
         let server_task = tokio::spawn(async move {
-            let mut server = b.accept().await.unwrap().unwrap();
+            let mut server = b.accept().await.unwrap().unwrap().into_parts();
             // Kontrol döngüsü: heartbeat'i yerinde yanıtlar.
             let _ = server.next_control_message().await;
             server
         });
 
-        let mut client = a.connect(addr, None).await.unwrap();
+        let mut client = a.connect(addr, None).await.unwrap().into_parts();
         let rtt = client.heartbeat().await.expect("heartbeat yanıtlanmalı");
         assert!(rtt.as_micros() > 0, "ölçülebilir bir RTT dönmeli");
 

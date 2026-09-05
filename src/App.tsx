@@ -9,6 +9,7 @@ import { initTheme, useUiStore } from "./stores/uiStore";
 import { useAppStore } from "./stores/appStore";
 import { subscribeToDiscovery, useDeviceStore } from "./stores/deviceStore";
 import { subscribeToPairing, usePairingStore } from "./stores/pairingStore";
+import { subscribeToChat } from "./stores/chatStore";
 
 export default function App() {
   const loadAppInfo = useAppStore((s) => s.load);
@@ -28,6 +29,7 @@ export default function App() {
   const loadTrusted = usePairingStore((s) => s.loadTrusted);
   useEffect(() => void loadTrusted(), [loadTrusted]);
   useEffect(() => subscribeToPairing(), []);
+  useEffect(() => subscribeToChat(), []);
 
   return (
     // Masaüstü uygulaması dosya protokolünden servis edildiği için HashRouter.

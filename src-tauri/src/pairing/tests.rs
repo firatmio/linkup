@@ -122,8 +122,8 @@ async fn iki_taraf_onaylarsa_eslesme_tamamlanir() {
     let (manager_b, harness_b, db_b) = manager(true);
 
     let (client, server) = tokio::join!(a.connect(addr, None), b.accept());
-    let mut client = client.unwrap();
-    let mut server = server.unwrap().unwrap();
+    let mut client = client.unwrap().into_parts();
+    let mut server = server.unwrap().unwrap().into_parts();
 
     let (result_a, result_b) = tokio::join!(
         super::run(Arc::clone(&manager_a), &mut client, true),
@@ -161,8 +161,8 @@ async fn karsi_taraf_reddederse_hicbir_tarafta_kayit_olusmaz() {
     let (manager_b, _harness_b, db_b) = manager(false);
 
     let (client, server) = tokio::join!(a.connect(addr, None), b.accept());
-    let mut client = client.unwrap();
-    let mut server = server.unwrap().unwrap();
+    let mut client = client.unwrap().into_parts();
+    let mut server = server.unwrap().unwrap().into_parts();
 
     let (result_a, result_b) = tokio::join!(
         super::run(Arc::clone(&manager_a), &mut client, true),
@@ -197,8 +197,8 @@ async fn baslatan_taraf_reddederse_kayit_olusmaz() {
     let (manager_b, _harness_b, db_b) = manager(true);
 
     let (client, server) = tokio::join!(a.connect(addr, None), b.accept());
-    let mut client = client.unwrap();
-    let mut server = server.unwrap().unwrap();
+    let mut client = client.unwrap().into_parts();
+    let mut server = server.unwrap().unwrap().into_parts();
 
     let (result_a, result_b) = tokio::join!(
         super::run(Arc::clone(&manager_a), &mut client, true),
@@ -223,7 +223,10 @@ async fn eslesme_sonrasi_pinlenmis_baglanti_kod_sormaz() {
     let (manager_b, harness_b, _db_b) = manager(true);
 
     let (client, server) = tokio::join!(a.connect(addr, None), b.accept());
-    let (mut client, mut server) = (client.unwrap(), server.unwrap().unwrap());
+    let (mut client, mut server) = (
+        client.unwrap().into_parts(),
+        server.unwrap().unwrap().into_parts(),
+    );
     let (ra, rb) = tokio::join!(
         super::run(Arc::clone(&manager_a), &mut client, true),
         super::run(Arc::clone(&manager_b), &mut server, false),
@@ -264,8 +267,8 @@ async fn eslesme_sonrasi_baglanti_kullanilabilir_kalir() {
     let (manager_b, _hb, db_b) = manager(true);
 
     let (client, server) = tokio::join!(a.connect(addr, None), b.accept());
-    let mut client = client.unwrap();
-    let mut server = server.unwrap().unwrap();
+    let mut client = client.unwrap().into_parts();
+    let mut server = server.unwrap().unwrap().into_parts();
 
     let (ra, rb) = tokio::join!(
         super::run(Arc::clone(&manager_a), &mut client, true),

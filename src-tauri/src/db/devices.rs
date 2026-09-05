@@ -39,6 +39,10 @@ pub struct TrustedDeviceDto {
     pub last_address: Option<String>,
     pub paired_at: i64,
     pub online: bool,
+    /// Sohbet listesinde gösterilecek son mesaj özeti.
+    pub last_message: Option<String>,
+    pub last_message_at: Option<i64>,
+    pub unread: i64,
 }
 
 pub fn now() -> i64 {

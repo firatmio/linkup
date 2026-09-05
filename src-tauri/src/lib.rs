@@ -1,3 +1,4 @@
+mod chat;
 mod cli;
 mod commands;
 mod db;
@@ -55,6 +56,16 @@ pub fn run() {
             }
 
             let db = db::open(&paths.db_path)?;
+
+            // Uygulama kapanırken yolda kalan mesajlar `sending` durumunda
+            // donar; göstergenin sonsuza kadar dönmemesi için işaretlenir.
+            if let Ok(conn) = db.get() {
+                if let Ok(count) = db::messages::fail_stuck_outgoing(&conn) {
+                    if count > 0 {
+                        tracing::info!(count, "yolda kalmış mesajlar başarısız işaretlendi");
+                    }
+                }
+            }
             let identity = identity::load_or_create(&paths)?;
             let device_name = default_device_name(&paths);
 
@@ -118,6 +129,9 @@ pub fn run() {
             commands::start_pairing,
             commands::respond_to_pairing,
             commands::forget_device,
+            commands::chat_history,
+            commands::send_message,
+            commands::mark_conversation_read,
             commands::set_setting,
             commands::open_log_dir
         ])

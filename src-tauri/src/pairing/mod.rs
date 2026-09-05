@@ -19,7 +19,7 @@ use tauri::{AppHandle, Emitter};
 use tokio::sync::oneshot;
 
 use crate::db::{devices, DbPool};
-use crate::network::endpoint::{NetworkError, PeerConnection};
+use crate::network::endpoint::{NetworkError, PeerParts};
 use crate::network::protocol::ControlMessage;
 
 /// Kullanıcının kodu karşılaştırıp karar vermesi için tanınan süre
@@ -208,11 +208,13 @@ impl PairingManager {
 /// hâlde istek zaten alınmış demektir.
 pub async fn run(
     manager: Arc<PairingManager>,
-    connection: &mut PeerConnection,
+    connection: &mut PeerParts,
     initiated_by_us: bool,
 ) -> Result<(), PairingError> {
     if initiated_by_us {
-        connection.send(&ControlMessage::PairingRequest).await?;
+        connection
+            .send_frame(&ControlMessage::PairingRequest)
+            .await?;
     }
 
     let code = compute_code(connection)?;
@@ -272,7 +274,7 @@ pub async fn run(
 /// kullanıcı boşuna kod karşılaştırır.
 async fn exchange_decisions(
     manager: &PairingManager,
-    connection: &mut PeerConnection,
+    connection: &mut PeerParts,
     decision_rx: oneshot::Receiver<bool>,
 ) -> Result<(), PairingError> {
     let deadline = tokio::time::Instant::now() + DECISION_TIMEOUT;
@@ -291,7 +293,7 @@ async fn exchange_decisions(
             biased;
 
             _ = tokio::time::sleep_until(deadline) => {
-                let _ = connection.send(&ControlMessage::PairingReject).await;
+                let _ = connection.send_frame(&ControlMessage::PairingReject).await;
                 return Err(PairingError::TimedOut);
             }
 
@@ -299,7 +301,7 @@ async fn exchange_decisions(
                 decision_rx = None;
                 let accepted = user.unwrap_or(false);
                 connection
-                    .send(if accepted {
+                    .send_frame(if accepted {
                         &ControlMessage::PairingConfirm
                     } else {
                         &ControlMessage::PairingReject
@@ -327,10 +329,10 @@ async fn exchange_decisions(
     }
 }
 
-fn compute_code(connection: &PeerConnection) -> Result<String, PairingError> {
+fn compute_code(connection: &PeerParts) -> Result<String, PairingError> {
     let mut exporter = [0u8; sas::EXPORTER_LEN];
     connection
-        .connection()
+        .connection
         .export_keying_material(&mut exporter, sas::EXPORTER_LABEL, b"")
         .map_err(|_| PairingError::Exporter("TLS exporter kullanılamadı".to_string()))?;
 
@@ -341,7 +343,7 @@ fn compute_code(connection: &PeerConnection) -> Result<String, PairingError> {
     ))
 }
 
-fn persist(manager: &PairingManager, connection: &PeerConnection) -> Result<(), PairingError> {
+fn persist(manager: &PairingManager, connection: &PeerParts) -> Result<(), PairingError> {
     let conn = manager
         .db
         .get()

@@ -6,15 +6,19 @@
 //! sorulmaz — kimlik doğrulaması TLS katmanında pinlenmiş anahtarla yapılır
 //! (PLAN.md §2.2.1).
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use tauri::{AppHandle, Emitter};
 
+use tokio::sync::mpsc;
+
 use super::backoff::Backoff;
-use super::endpoint::{NetworkEndpoint, PeerConnection};
+use super::endpoint::{NetworkEndpoint, PeerConnection, PeerParts};
+use super::protocol::{read_frame, write_frame};
+use crate::db::messages::MessageStatus;
 use crate::db::{devices, DbPool};
 use crate::discovery::registry::Registry;
 use crate::network::protocol::ControlMessage;
@@ -68,6 +72,9 @@ pub struct ConnectionManager {
     discovery: Arc<Mutex<Registry>>,
     pairing: Arc<PairingManager>,
     pub presence: Arc<Presence>,
+    /// Bağlı cihazlara mesaj göndermek için kanallar. Bağlantı döngüsü
+    /// akışların sahibi olduğundan, dışarıdan gönderim ancak buradan geçer.
+    outbox: Mutex<HashMap<[u8; 32], mpsc::Sender<ControlMessage>>>,
 }
 
 impl ConnectionManager {
@@ -85,6 +92,7 @@ impl ConnectionManager {
             discovery,
             pairing,
             presence: Arc::new(Presence::default()),
+            outbox: Mutex::new(HashMap::new()),
         })
     }
 
@@ -190,11 +198,31 @@ impl ConnectionManager {
             .unwrap_or(false)
     }
 
+    /// Bir cihaza mesaj gönderir. Cihaz bağlı değilse `false` döner.
+    pub fn send_to(&self, device_id: &[u8; 32], message: ControlMessage) -> bool {
+        let sender = {
+            let outbox = self.outbox.lock().expect("outbox kilidi");
+            outbox.get(device_id).cloned()
+        };
+        match sender {
+            Some(sender) => sender.try_send(message).is_ok(),
+            None => false,
+        }
+    }
+
+    pub fn is_connected(&self, device_id: &[u8; 32]) -> bool {
+        self.presence.is_online(device_id)
+    }
+
     /// Kurulmuş bir bağlantıyı, kopana kadar ayakta tutar.
     ///
     /// Gelen bağlantılar için de kullanılır: kaynağı ne olursa olsun bağlantı
     /// yaşam döngüsü aynıdır.
-    pub async fn hold(&self, mut connection: PeerConnection) {
+    pub async fn hold(&self, connection: PeerConnection) {
+        self.hold_parts(connection.into_parts()).await;
+    }
+
+    pub async fn hold_parts(&self, connection: PeerParts) {
         let device_id = connection.peer_device_id;
 
         if !self.presence.claim(device_id) {
@@ -206,57 +234,131 @@ impl ConnectionManager {
         }
 
         let address = connection.remote_address();
+        let peer_name = connection.peer.device_name.clone();
         if let Ok(conn) = self.db.get() {
             let _ = devices::touch(&conn, &device_id, &address.to_string());
         }
 
-        tracing::info!(
-            peer = %connection.peer.device_name,
-            %address,
-            "güvenilir cihaza bağlandı"
-        );
+        tracing::info!(peer = %peer_name, %address, "güvenilir cihaza bağlandı");
         self.emit_presence();
 
-        // Bağlantı kopana kadar gelen mesajlar işlenir.
-        //
-        // Uygulama seviyesinde ayrıca heartbeat DÖNGÜSÜ kurulmuyor: QUIC'in
-        // kendi keep-alive'ı (5 sn) bağlantıyı canlı tutuyor ve max_idle_timeout
-        // (20 sn) ölü bağlantıyı zaten hataya çeviriyor (§2.2.2). İkinci bir
-        // canlılık mekanizması yalnızca trafik ve karmaşıklık eklerdi.
-        // `Heartbeat` mesajı RTT ölçmek için duruyor, istendiğinde kullanılır.
+        let (tx, rx) = mpsc::channel(64);
+        self.outbox
+            .lock()
+            .expect("outbox kilidi")
+            .insert(device_id, tx);
+
+        self.run_connection(connection, device_id, &peer_name, rx)
+            .await;
+
+        self.outbox
+            .lock()
+            .expect("outbox kilidi")
+            .remove(&device_id);
+        self.presence.release(&device_id);
+        self.emit_presence();
+    }
+
+    /// Bağlantı döngüsü: giden kuyruğu ve gelen mesajları eşzamanlı işler.
+    ///
+    /// Uygulama seviyesinde ayrıca heartbeat DÖNGÜSÜ kurulmuyor: QUIC'in kendi
+    /// keep-alive'ı (5 sn) bağlantıyı canlı tutuyor ve max_idle_timeout (20 sn)
+    /// ölü bağlantıyı zaten hataya çeviriyor (§2.2.2).
+    async fn run_connection(
+        &self,
+        parts: PeerParts,
+        device_id: [u8; 32],
+        peer_name: &str,
+        mut outgoing: mpsc::Receiver<ControlMessage>,
+    ) {
+        let mut parts = parts;
+
         loop {
-            match connection.next_control_message().await {
-                // Güvendiğimiz bir cihaz yeniden eşleşmek isteyebilir: karşı
-                // taraf bizi unutmuşsa (veya eşleşme tek tarafta kalmışsa) tek
-                // çıkış yolu budur. Reddedersek iki cihaz birbirine bir daha
-                // asla bağlanamaz.
-                Ok(ControlMessage::PairingRequest) => {
-                    tracing::info!(
-                        peer = %connection.peer.device_name,
-                        "güvenilir cihaz yeniden eşleşme istedi"
-                    );
-                    if pairing::run(Arc::clone(&self.pairing), &mut connection, false)
-                        .await
-                        .is_err()
-                    {
+            let result = tokio::select! {
+                message = outgoing.recv() => match message {
+                    Some(message) => write_frame(&mut parts.send, &message).await.map(|_| true),
+                    // Kanal kapandı: bağlantı sahipliği bırakılıyor.
+                    None => break,
+                },
+                frame = read_frame(&mut parts.recv) => match frame {
+                    Ok(message) => self.handle_message(&mut parts, device_id, message).await,
+                    Err(err) => {
+                        tracing::info!(peer = %peer_name, error = %err, "bağlantı koptu");
                         break;
                     }
-                }
-                // Faz 5'ten itibaren chat ve transfer mesajları burada işlenecek.
-                Ok(message) => tracing::debug!(?message, "kontrol mesajı alındı"),
+                },
+            };
+
+            match result {
+                Ok(true) => {}
+                Ok(false) => break,
                 Err(err) => {
-                    tracing::info!(
-                        peer = %connection.peer.device_name,
-                        error = %err,
-                        "bağlantı koptu"
-                    );
+                    tracing::info!(peer = %peer_name, error = %err, "bağlantı koptu");
                     break;
                 }
             }
         }
 
-        self.presence.release(&device_id);
-        self.emit_presence();
+        parts.close();
+    }
+
+    /// Gelen bir kontrol mesajını işler. `Ok(false)` bağlantının kapatılması
+    /// gerektiğini bildirir.
+    async fn handle_message(
+        &self,
+        parts: &mut PeerParts,
+        device_id: [u8; 32],
+        message: ControlMessage,
+    ) -> Result<bool, super::protocol::WireError> {
+        match message {
+            ControlMessage::Heartbeat { nonce } => {
+                write_frame(&mut parts.send, &ControlMessage::HeartbeatAck { nonce }).await?;
+            }
+
+            ControlMessage::Chat(incoming) => {
+                match crate::chat::handle_incoming(&self.db, &self.app, &device_id, incoming) {
+                    Ok(ack) => write_frame(&mut parts.send, &ack).await?,
+                    Err(err) => tracing::warn!(error = %err, "gelen mesaj kaydedilemedi"),
+                }
+            }
+
+            ControlMessage::ChatAck { msg_id } => {
+                let _ = crate::chat::apply_status(
+                    &self.db,
+                    &self.app,
+                    &device_id,
+                    &[msg_id],
+                    MessageStatus::Delivered,
+                );
+            }
+
+            ControlMessage::ReadReceipt { msg_ids } => {
+                let _ = crate::chat::apply_status(
+                    &self.db,
+                    &self.app,
+                    &device_id,
+                    &msg_ids,
+                    MessageStatus::Read,
+                );
+            }
+
+            // Güvendiğimiz bir cihaz yeniden eşleşmek isteyebilir: karşı taraf
+            // bizi unutmuşsa (veya eşleşme tek tarafta kalmışsa) tek çıkış yolu
+            // budur. Reddedersek iki cihaz birbirine bir daha asla bağlanamaz.
+            ControlMessage::PairingRequest => {
+                tracing::info!("güvenilir cihaz yeniden eşleşme istedi");
+                if pairing::run(Arc::clone(&self.pairing), parts, false)
+                    .await
+                    .is_err()
+                {
+                    return Ok(false);
+                }
+            }
+
+            other => tracing::debug!(?other, "işlenmeyen kontrol mesajı"),
+        }
+
+        Ok(true)
     }
 
     fn emit_presence(&self) {

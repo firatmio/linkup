@@ -153,7 +153,7 @@ async fn accept_loop(
 async fn handle_connection(
     pairing: Arc<PairingManager>,
     connections: Arc<ConnectionManager>,
-    mut connection: PeerConnection,
+    connection: PeerConnection,
 ) {
     let device_id = connection.peer_device_id;
 
@@ -170,9 +170,11 @@ async fn handle_connection(
         return;
     }
 
-    match connection.next_control_message().await {
+    let mut parts = connection.into_parts();
+
+    match parts.next_control_message().await {
         Ok(ControlMessage::PairingRequest) => {
-            let result = pairing::run(Arc::clone(&pairing), &mut connection, false).await;
+            let result = pairing::run(Arc::clone(&pairing), &mut parts, false).await;
             if result.is_ok() {
                 // Bağlantı KAPATILMIYOR, denetleyiciye devrediliyor.
                 //
@@ -181,18 +183,18 @@ async fn handle_connection(
                 // teslim edilmemiş veriyi atar. Sonuç, bir tarafın eşleşmiş
                 // diğerinin eşleşmemiş sayıldığı asimetrik bir durumdu.
                 connections.supervise(device_id);
-                connections.hold(connection).await;
+                connections.hold_parts(parts).await;
                 return;
             }
         }
         Ok(other) => {
             tracing::warn!(?other, "eşleşmemiş cihazdan izin verilmeyen mesaj");
-            let _ = connection
-                .send(&ControlMessage::Error(ProtocolError::NotPaired))
+            let _ = parts
+                .send_frame(&ControlMessage::Error(ProtocolError::NotPaired))
                 .await;
         }
         Err(err) => tracing::debug!(error = %err, "eşleşmemiş bağlantı kapandı"),
     }
 
-    connection.close();
+    parts.close();
 }

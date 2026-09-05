@@ -33,7 +33,18 @@ export function DeviceSummaryCard({ device }: { device: TrustedDevice }) {
             />
             {t(device.online ? "status.online" : "status.offline")}
           </p>
+          {device.lastMessage ? (
+            <p className="mt-1.5 truncate text-[length:var(--lu-text-caption)] text-fg-secondary">
+              {device.lastMessage}
+            </p>
+          ) : null}
         </div>
+
+        {device.unread > 0 ? (
+          <span className="mt-0.5 shrink-0 rounded-lu-full bg-accent px-1.5 text-[length:var(--lu-text-caption)] text-on-accent">
+            {device.unread}
+          </span>
+        ) : null}
 
         <button
           type="button"

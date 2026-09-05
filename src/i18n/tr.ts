@@ -72,6 +72,22 @@ export const tr = {
   "chats.title": "Sohbetler",
   "chats.empty.title": "Sohbet yok",
   "chats.empty.body": "Bir cihazla eşleştiğinizde sohbetler burada listelenir.",
+  "chats.select": "Soldan bir cihaz seçin",
+  "chats.noMessages": "Henüz mesaj yok. İlk mesajı siz yazın.",
+  "chats.placeholder": "Mesaj yaz…",
+  "chats.placeholder.offline": "Cihaz çevrimdışı",
+  "chats.send": "Gönder",
+  "chats.sendHint": "Enter ile gönder, Shift+Enter ile alt satır",
+  "chats.codeToggle": "Kod bloğu olarak gönder",
+  "chats.copyCode": "Kopyala",
+  "chats.copied": "Kopyalandı",
+
+  // Mesaj durumları
+  "message.status.sending": "Gönderiliyor",
+  "message.status.sent": "Gönderildi",
+  "message.status.delivered": "İletildi",
+  "message.status.read": "Görüldü",
+  "message.status.failed": "Gönderilemedi",
 
   // Gelen dosyalar
   "files.title": "Gelen Dosyalar",

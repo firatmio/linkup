@@ -5,10 +5,12 @@ use serde::Serialize;
 use tauri::State;
 
 use crate::db::devices::TrustedDeviceDto;
+use crate::db::messages::{self, Message, MessageStatus};
 use crate::db::settings::{self, Settings};
 use crate::discovery::{DiscoveredDeviceDto, DiscoveryService};
 use crate::error::{AppError, AppResult};
 use crate::identity::KeyStorage;
+use crate::network::protocol::{ContentType, ControlMessage};
 use crate::state::AppState;
 
 #[derive(Debug, Serialize)]
@@ -115,17 +117,30 @@ pub fn forget_discovered_device(state: State<'_, AppState>, id: String) -> bool 
 /// Eşleşmiş, güvenilir cihazlar (PLAN.md §2.12).
 #[tauri::command]
 pub fn trusted_devices(state: State<'_, AppState>) -> Vec<TrustedDeviceDto> {
+    let conn = state.db.get().ok();
     state
         .pairing
         .trusted_devices()
         .iter()
-        .map(|device| TrustedDeviceDto {
-            id: data_encoding::BASE32_NOPAD.encode(&device.device_id),
-            fingerprint: crate::identity::format_fingerprint(&device.device_id),
-            name: device.display_name().to_string(),
-            last_address: device.last_address.clone(),
-            paired_at: device.paired_at,
-            online: state.connections.presence.is_online(&device.device_id),
+        .map(|device| {
+            let last = conn
+                .as_ref()
+                .and_then(|c| messages::last_message(c, &device.device_id).ok())
+                .flatten();
+            TrustedDeviceDto {
+                id: data_encoding::BASE32_NOPAD.encode(&device.device_id),
+                fingerprint: crate::identity::format_fingerprint(&device.device_id),
+                name: device.display_name().to_string(),
+                last_address: device.last_address.clone(),
+                paired_at: device.paired_at,
+                online: state.connections.presence.is_online(&device.device_id),
+                last_message: last.as_ref().map(|m| m.content.clone()),
+                last_message_at: last.as_ref().map(|m| m.sent_at),
+                unread: conn
+                    .as_ref()
+                    .and_then(|c| messages::unread_count(c, &device.device_id).ok())
+                    .unwrap_or(0),
+            }
         })
         .collect()
 }
@@ -136,22 +151,22 @@ pub fn trusted_devices(state: State<'_, AppState>) -> Vec<TrustedDeviceDto> {
 /// bu sırada `respond_to_pairing` ile ayrı bir komuttan gelir.
 #[tauri::command]
 pub async fn start_pairing(state: State<'_, AppState>, id: String) -> AppResult<()> {
-    let device_id = DiscoveryService::parse_device_id(&id)
-        .ok_or_else(|| AppError::InvalidInput("geçersiz cihaz kimliği".to_string()))?;
+    let device_id = parse_device_id(&id)?;
 
     let address = state
         .discovery
         .address_of(&device_id)
         .ok_or_else(|| AppError::Unreachable("cihazın adresi bilinmiyor".to_string()))?;
 
-    let mut connection = state
+    let mut parts = state
         .network
         .endpoint()
         .connect(address, Some(device_id))
         .await
-        .map_err(|err| AppError::Unreachable(err.to_string()))?;
+        .map_err(|err| AppError::Unreachable(err.to_string()))?
+        .into_parts();
 
-    let result = crate::pairing::run(std::sync::Arc::clone(&state.pairing), &mut connection, true)
+    let result = crate::pairing::run(std::sync::Arc::clone(&state.pairing), &mut parts, true)
         .await
         .map_err(|err| AppError::Pairing(err.code()));
 
@@ -162,12 +177,12 @@ pub async fn start_pairing(state: State<'_, AppState>, id: String) -> AppResult<
             let connections = std::sync::Arc::clone(&state.connections);
             connections.supervise(device_id);
             tauri::async_runtime::spawn(async move {
-                connections.hold(connection).await;
+                connections.hold_parts(parts).await;
             });
             Ok(())
         }
         Err(err) => {
-            connection.close();
+            parts.close();
             Err(err)
         }
     }
@@ -182,9 +197,76 @@ pub fn respond_to_pairing(state: State<'_, AppState>, session_id: String, accept
 /// Cihazı unutur: kayıt, mesajları ve senkron klasörleriyle birlikte silinir.
 #[tauri::command]
 pub fn forget_device(state: State<'_, AppState>, id: String) -> AppResult<bool> {
-    let device_id = DiscoveryService::parse_device_id(&id)
-        .ok_or_else(|| AppError::InvalidInput("geçersiz cihaz kimliği".to_string()))?;
+    let device_id = parse_device_id(&id)?;
     Ok(state.pairing.forget(&device_id))
+}
+
+/// Bir cihazla olan sohbet geçmişi (PLAN.md §2.8).
+#[tauri::command]
+pub fn chat_history(
+    state: State<'_, AppState>,
+    id: String,
+    limit: Option<u32>,
+) -> AppResult<Vec<Message>> {
+    let device_id = parse_device_id(&id)?;
+    let conn = state.db.get().map_err(pool_error)?;
+    messages::list(&conn, &device_id, limit.unwrap_or(200), None)
+}
+
+/// Metin mesajı gönderir.
+///
+/// Mesaj her hâlükârda kaydedilir; cihaz bağlı değilse durumu başarısız olur.
+/// Böylece kullanıcı yazdığı şeyi kaybetmez ve neden gitmediğini görür.
+#[tauri::command]
+pub fn send_message(
+    state: State<'_, AppState>,
+    id: String,
+    body: String,
+    is_code: Option<bool>,
+) -> AppResult<Message> {
+    let device_id = parse_device_id(&id)?;
+    let content_type = if is_code.unwrap_or(false) {
+        ContentType::Code
+    } else {
+        ContentType::Text
+    };
+
+    let (mut stored, frame) =
+        crate::chat::prepare_outgoing(&state.db, &device_id, content_type, &body)?;
+
+    let delivered = state.connections.send_to(&device_id, frame);
+    let status = if delivered {
+        MessageStatus::Sent
+    } else {
+        MessageStatus::Failed
+    };
+
+    let conn = state.db.get().map_err(pool_error)?;
+    messages::advance_status(&conn, &stored.msg_id, status)?;
+    stored.status = status.as_str().to_string();
+
+    if !delivered {
+        tracing::info!("cihaz bağlı değil, mesaj gönderilemedi");
+    }
+    Ok(stored)
+}
+
+/// Sohbet açıldığında gelen mesajları okundu işaretler ve karşı tarafa bildirir.
+#[tauri::command]
+pub fn mark_conversation_read(state: State<'_, AppState>, id: String) -> AppResult<usize> {
+    let device_id = parse_device_id(&id)?;
+    let conn = state.db.get().map_err(pool_error)?;
+    let msg_ids = messages::mark_incoming_read(&conn, &device_id)?;
+
+    if !msg_ids.is_empty() {
+        state.connections.send_to(
+            &device_id,
+            ControlMessage::ReadReceipt {
+                msg_ids: msg_ids.clone(),
+            },
+        );
+    }
+    Ok(msg_ids.len())
 }
 
 /// Ayarlar → Gelişmiş → "Log klasörünü aç" (PLAN.md §2.14).
@@ -194,6 +276,11 @@ pub fn open_log_dir(state: State<'_, AppState>) -> AppResult<()> {
     tauri_plugin_opener::open_path(path.to_string_lossy().to_string(), None::<&str>)
         .map_err(|e| AppError::Internal(anyhow::anyhow!("log klasörü açılamadı: {e}")))?;
     Ok(())
+}
+
+fn parse_device_id(id: &str) -> AppResult<[u8; 32]> {
+    DiscoveryService::parse_device_id(id)
+        .ok_or_else(|| AppError::InvalidInput("geçersiz cihaz kimliği".to_string()))
 }
 
 fn pool_error(err: r2d2::Error) -> AppError {
