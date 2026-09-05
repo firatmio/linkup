@@ -1,9 +1,0 @@
-name: Ping
-on:
-  push:
-    branches: [main]
-jobs:
-  ping:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo ok
