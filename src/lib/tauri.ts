@@ -145,6 +145,11 @@ export interface TransferProgress {
   bytesPerSecond: number;
 }
 
+/** Bildirime tıklandığında nereye gidileceği. */
+export type NotificationAction =
+  | { kind: "openChat"; deviceId: string }
+  | { kind: "openFiles" };
+
 /** Backend'in yayınladığı olaylar. */
 export const events = {
   discoveryChanged: "discovery:changed",
@@ -158,7 +163,14 @@ export const events = {
   transferChanged: "transfer:changed",
   transferRequested: "transfer:requested",
   transferResolved: "transfer:resolved",
+  notificationActivated: "notification:activated",
 } as const;
+
+export function onNotificationActivated(
+  handler: (action: NotificationAction) => void,
+): Promise<UnlistenFn> {
+  return listen<NotificationAction>(events.notificationActivated, (e) => handler(e.payload));
+}
 
 export function onTransferRequested(
   handler: (request: TransferRequest) => void,

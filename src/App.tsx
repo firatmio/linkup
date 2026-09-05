@@ -11,6 +11,13 @@ import { subscribeToDiscovery, useDeviceStore } from "./stores/deviceStore";
 import { subscribeToPairing, usePairingStore } from "./stores/pairingStore";
 import { subscribeToChat } from "./stores/chatStore";
 import { subscribeToTransfers, useTransferStore } from "./stores/transferStore";
+import { useNotificationRouting } from "./features/notifications/useNotificationRouting";
+
+/** Router bağlamı gerektirdiği için ayrı bileşen. */
+function NotificationRouting() {
+  useNotificationRouting();
+  return null;
+}
 
 export default function App() {
   const loadAppInfo = useAppStore((s) => s.load);
@@ -40,6 +47,7 @@ export default function App() {
   return (
     // Masaüstü uygulaması dosya protokolünden servis edildiği için HashRouter.
     <HashRouter>
+      <NotificationRouting />
       <AppShell>
         <Routes>
           <Route path="/" element={<Dashboard />} />

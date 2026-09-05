@@ -4,9 +4,31 @@
 //! Ekranda açık duran bir sohbete gelen mesaj için ayrıca bildirim basmak,
 //! kullanıcının zaten gördüğü şeyi tekrar etmektir ve hızla rahatsız edici
 //! hâle gelir.
+//!
+//! **Tıklama desteği (Faz 7'de doğrulandı):** Tauri'nin `notification`
+//! eklentisi masaüstünde HİÇBİR olay yayınlamaz — `onAction` ve
+//! `onNotificationReceived` yalnızca mobil içindir. Planın §2.10'da
+//! işaretlediği risk buydu. Bu yüzden Windows'ta eklenti yerine doğrudan
+//! `tauri-winrt-notification` kullanılıyor: `on_activated` geri çağrısı
+//! sayesinde toast'a tıklayınca pencere öne getirilip ilgili ekrana
+//! yönlendirilebiliyor. Diğer platformlarda eklenti kullanılmaya devam ediyor
+//! (orada tıklama yönlendirmesi henüz yok).
 
-use tauri::{AppHandle, Manager};
-use tauri_plugin_notification::NotificationExt;
+use serde::Serialize;
+use tauri::{AppHandle, Emitter, Manager};
+
+/// Bildirime tıklandığında frontend'e gönderilen olay.
+pub const EVENT_ACTIVATED: &str = "notification:activated";
+
+/// Bildirime tıklanınca gidilecek yer.
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum Action {
+    /// Bu cihazın sohbetini aç.
+    OpenChat { device_id: String },
+    /// Gelen dosyalar ekranını aç.
+    OpenFiles,
+}
 
 /// Ana pencere odakta ve görünür mü?
 ///
@@ -24,36 +46,98 @@ fn window_has_focus(app: &AppHandle) -> bool {
     focused && visible && !minimized
 }
 
-fn notify(app: &AppHandle, title: &str, body: &str) {
+/// Pencereyi öne getirir ve frontend'i ilgili ekrana yönlendirir.
+fn activate(app: &AppHandle, action: &Action) {
+    if let Some(window) = app.get_webview_window("main") {
+        // Simge durumundaysa önce geri al: yalnızca `set_focus` çağırmak
+        // küçültülmüş pencereyi geri getirmez.
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+    let _ = app.emit(EVENT_ACTIVATED, action);
+}
+
+fn notify(app: &AppHandle, title: &str, body: &str, action: Action) {
     if window_has_focus(app) {
         return;
     }
+    show_native(app, title, body, action);
+}
 
+#[cfg(windows)]
+fn show_native(app: &AppHandle, title: &str, body: &str, action: Action) {
+    use tauri_winrt_notification::Toast;
+
+    let build = |app_id: &str| {
+        let handle = app.clone();
+        let action = action.clone();
+        Toast::new(app_id)
+            .title(title)
+            .text1(body)
+            .on_activated(move |_| {
+                activate(&handle, &action);
+                Ok(())
+            })
+    };
+
+    // Uygulamanın kendi AppUserModelID'si yalnızca KURULU sürümlerde kayıtlıdır
+    // (installer bir Başlat Menüsü kısayolu oluşturur). Geliştirme sırasında
+    // kayıtlı olmadığı için toast gösterilemez; o durumda PowerShell'in
+    // kimliğine düşülür. Bildirimin hiç çıkmaması, farklı bir isimle
+    // çıkmasından kötü.
+    let identifier = app.config().identifier.clone();
+    if build(&identifier).show().is_ok() {
+        return;
+    }
+
+    if let Err(err) = build(Toast::POWERSHELL_APP_ID).show() {
+        tracing::debug!(error = %err, "bildirim gösterilemedi");
+    }
+}
+
+#[cfg(not(windows))]
+fn show_native(app: &AppHandle, title: &str, body: &str, _action: Action) {
+    use tauri_plugin_notification::NotificationExt;
+
+    // Bu platformlarda eklenti tıklama olayı vermiyor; bildirim gösterilir
+    // ama yönlendirme yapılamaz.
     if let Err(err) = app.notification().builder().title(title).body(body).show() {
-        // Bildirim gösterilememesi akışı durdurmamalı; kullanıcı izin
-        // vermemiş olabilir.
         tracing::debug!(error = %err, "bildirim gösterilemedi");
     }
 }
 
 /// Yeni sohbet mesajı geldi.
-pub fn message_received(app: &AppHandle, device_name: &str, preview: &str) {
-    // Mesaj içeriği loglanmaz ama bildirimde gösterilir: bildirim zaten
-    // kullanıcının kendi ekranı (PLAN.md §2.14 log kuralıyla çelişmez).
-    notify(app, device_name, &truncate(preview, 140));
+pub fn message_received(app: &AppHandle, device_id: &str, device_name: &str, preview: &str) {
+    notify(
+        app,
+        device_name,
+        &truncate(preview, 140),
+        Action::OpenChat {
+            device_id: device_id.to_string(),
+        },
+    );
 }
 
 /// Dosya alındı.
 pub fn file_received(app: &AppHandle, device_name: &str, file_name: &str) {
-    notify(app, &format!("{device_name} bir dosya gönderdi"), file_name);
+    notify(
+        app,
+        &format!("{device_name} bir dosya gönderdi"),
+        file_name,
+        Action::OpenFiles,
+    );
 }
 
 /// Dosya gönderme isteği onay bekliyor.
-pub fn file_offer(app: &AppHandle, device_name: &str, file_name: &str) {
+pub fn file_offer(app: &AppHandle, device_id: &str, device_name: &str, file_name: &str) {
     notify(
         app,
         &format!("{device_name} dosya göndermek istiyor"),
         file_name,
+        Action::OpenChat {
+            device_id: device_id.to_string(),
+        },
     );
 }
 
@@ -94,5 +178,18 @@ mod tests {
 
         assert_eq!(result.chars().count(), 11);
         assert!(result.starts_with("ğüşiöçĞÜŞİ"));
+    }
+
+    /// Yönlendirme bilgisi frontend'in ayırt edebileceği biçimde gitmeli.
+    #[test]
+    fn eylem_serilestirmesi_ayirt_edilebilir() {
+        let chat = serde_json::to_string(&Action::OpenChat {
+            device_id: "ABC".into(),
+        })
+        .unwrap();
+        assert!(chat.contains("openChat") && chat.contains("ABC"), "{chat}");
+
+        let files = serde_json::to_string(&Action::OpenFiles).unwrap();
+        assert!(files.contains("openFiles"), "{files}");
     }
 }

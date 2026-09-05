@@ -560,7 +560,12 @@ async fn ask_user(
 ) -> bool {
     let decision = ctx.approvals.register(&offer.transfer_id);
     let safe_name = paths::sanitize_file_name(&offer.name);
-    crate::notifications::file_offer(&ctx.app, device_name, &safe_name);
+    crate::notifications::file_offer(
+        &ctx.app,
+        &data_encoding::BASE32_NOPAD.encode(device_id),
+        device_name,
+        &safe_name,
+    );
 
     let _ = ctx.app.emit(
         EVENT_REQUESTED,

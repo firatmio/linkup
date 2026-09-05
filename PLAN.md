@@ -297,7 +297,9 @@ Chunk başına hash **kullanılmaz**. QUIC/TLS 1.3 zaten her byte'ı authenticat
 - Tıklama davranışı ayarlardan seçilir:
   - **Varsayılan:** uygulama içi ilgili ekranı aç (mesaj → o sohbet; dosya → dosya bilgi ekranı)
   - **Alternatif:** doğrudan dosya sistemi konumunu aç
-- ⚠ **Fizibilite riski:** Tauri v2'de bildirime tıklama event'i platformlar arası eşit desteklenmiyor (özellikle Windows toast activation). **Faz 8'de önce temel tıklama event'i doğrulanacak**; gelmiyorsa yönlendirme özelliği devre dışı bırakılır ve bildirim yalnızca pencereyi öne getirir.
+- ✔ **Fizibilite riski çözüldü (Faz 7).** Risk gerçekti: Tauri'nin `notification` eklentisi masaüstünde HİÇBİR olay yayınlamıyor — kaynak incelendi, `desktop.rs` içinde tek bir `emit` yok; `onAction`/`onNotificationReceived` yalnızca mobil için. Çözüm: Windows'ta eklenti yerine doğrudan `tauri-winrt-notification` kullanılıyor, `on_activated` geri çağrısıyla pencere öne getirilip ilgili ekrana yönlendiriliyor (mesaj → o sohbet, dosya → Gelen Dosyalar).
+  - **Bilinen sınır:** Uygulamanın kendi AppUserModelID'si yalnızca KURULU sürümlerde kayıtlıdır (installer Başlat Menüsü kısayolu oluşturur). Geliştirme sırasında kayıtlı olmadığı için PowerShell kimliğine düşülür; bildirim çıkar ama gönderen adı "Windows PowerShell" görünür. Kurulu sürümde bu sorun yoktur.
+  - **Diğer platformlar:** macOS ve Linux'ta eklenti kullanılmaya devam ediyor; oralarda tıklama yönlendirmesi henüz yok.
 
 ### 2.11 Sistem Tepsisi, Kısayol, Yaşam Döngüsü
 

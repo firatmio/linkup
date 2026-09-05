@@ -117,7 +117,12 @@ pub fn handle_incoming(
     )?;
 
     if is_new {
-        crate::notifications::message_received(app, device_name, &incoming.body);
+        crate::notifications::message_received(
+            app,
+            &encode_device_id(device_id),
+            device_name,
+            &incoming.body,
+        );
         let _ = app.emit(
             EVENT_MESSAGE,
             IncomingEvent {

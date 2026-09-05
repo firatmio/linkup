@@ -49,6 +49,7 @@ blake3 = "1.8.7"
 fs4 = { version = "1.1.0", features = ["sync"] }
 tauri-plugin-dialog = "2.7.3"
 tauri-plugin-notification = "2.4.0"
+tauri-winrt-notification = "0.8.1"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
