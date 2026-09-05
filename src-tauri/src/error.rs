@@ -15,6 +15,9 @@ pub enum AppError {
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
 
+    #[error("veritabanı: {0}")]
+    Db(#[from] rusqlite::Error),
+
     #[error("ayar bulunamadı: {0}")]
     SettingNotFound(String),
 
@@ -30,6 +33,7 @@ impl AppError {
     pub fn code(&self) -> &'static str {
         match self {
             AppError::Io(_) => "error.io",
+            AppError::Db(_) => "error.db",
             AppError::SettingNotFound(_) => "error.settingNotFound",
             AppError::InvalidInput(_) => "error.invalidInput",
             AppError::Internal(_) => "error.internal",

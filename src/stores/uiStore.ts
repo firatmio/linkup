@@ -1,23 +1,39 @@
 import { create } from "zustand";
+import { api } from "../lib/tauri";
+import { translateError } from "../i18n";
 
 export type ThemePreference = "system" | "light" | "dark";
 export type ResolvedTheme = "light" | "dark";
 
 /**
- * Faz 0'da tema tercihi localStorage'da tutulur. Faz 1'de `settings` tablosuna
- * taşınacak (PLAN.md §2.12) — store arayüzü aynı kalacağı için bileşenler
- * etkilenmez.
+ * Tema tercihinin kaynağı `settings` tablosudur (PLAN.md §2.12).
+ *
+ * localStorage yalnızca bir ÖNBELLEK: veritabanı okuması asenkron olduğu için,
+ * ilk boyamada yanlış temayla yanıp sönmeyi (flash) önler. Çelişki hâlinde
+ * veritabanı kazanır ve önbellek güncellenir.
  */
-const STORAGE_KEY = "linkup.theme";
+const CACHE_KEY = "linkup.theme";
 
-function readStoredPreference(): ThemePreference {
+function isPreference(value: unknown): value is ThemePreference {
+  return value === "system" || value === "light" || value === "dark";
+}
+
+function readCache(): ThemePreference {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw === "light" || raw === "dark" || raw === "system") return raw;
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (isPreference(raw)) return raw;
   } catch {
     // Depolama erişilemiyorsa sessizce varsayılana düş.
   }
   return "system";
+}
+
+function writeCache(preference: ThemePreference) {
+  try {
+    localStorage.setItem(CACHE_KEY, preference);
+  } catch {
+    // Önbellek yazılamazsa da tema oturum içinde uygulanır.
+  }
 }
 
 function systemTheme(): ResolvedTheme {
@@ -35,24 +51,60 @@ function applyToDocument(theme: ResolvedTheme) {
 interface UiState {
   themePreference: ThemePreference;
   resolvedTheme: ResolvedTheme;
-  setThemePreference: (preference: ThemePreference) => void;
+  /** Tema yazılırken doğru; UI kontrolü bu sırada devre dışı kalır. */
+  savingTheme: boolean;
+  error: string | null;
+
+  /** Veritabanındaki tercihi okur ve uygular. */
+  hydrate: () => Promise<void>;
+  setThemePreference: (preference: ThemePreference) => Promise<void>;
   /** Sistem teması değiştiğinde çağrılır; tercih "system" ise yeniden çözer. */
   syncWithSystem: () => void;
 }
 
 export const useUiStore = create<UiState>((set, get) => ({
-  themePreference: readStoredPreference(),
-  resolvedTheme: resolve(readStoredPreference()),
+  themePreference: readCache(),
+  resolvedTheme: resolve(readCache()),
+  savingTheme: false,
+  error: null,
 
-  setThemePreference: (preference) => {
-    const resolved = resolve(preference);
+  hydrate: async () => {
     try {
-      localStorage.setItem(STORAGE_KEY, preference);
-    } catch {
-      // Tercih kalıcı olmasa da oturum içinde uygulanmalı.
+      const settings = await api.getSettings();
+      const preference = isPreference(settings.theme) ? settings.theme : "system";
+      const resolved = resolve(preference);
+      writeCache(preference);
+      applyToDocument(resolved);
+      set({ themePreference: preference, resolvedTheme: resolved, error: null });
+    } catch (err) {
+      // Önbellekten uygulanan tema yerinde kalır; kullanıcı karanlıkta kalmaz.
+      set({ error: translateError(err) });
     }
+  },
+
+  setThemePreference: async (preference) => {
+    const previous = get().themePreference;
+    const resolved = resolve(preference);
+
+    // İyimser uygulama: tema anında değişir, yazma arkada tamamlanır.
     applyToDocument(resolved);
-    set({ themePreference: preference, resolvedTheme: resolved });
+    set({ themePreference: preference, resolvedTheme: resolved, savingTheme: true, error: null });
+
+    try {
+      await api.setSetting("theme", preference);
+      writeCache(preference);
+      set({ savingTheme: false });
+    } catch (err) {
+      // Kalıcı olmadıysa göstermek yanıltıcı olur — eski tercihe geri dönülür.
+      const revertedResolved = resolve(previous);
+      applyToDocument(revertedResolved);
+      set({
+        themePreference: previous,
+        resolvedTheme: revertedResolved,
+        savingTheme: false,
+        error: translateError(err),
+      });
+    }
   },
 
   syncWithSystem: () => {

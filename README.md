@@ -7,7 +7,12 @@ Ayrıntılı mimari, protokol tasarımı ve faz planı için: [PLAN.md](PLAN.md)
 
 ## Durum
 
-**Faz 0 — İskelet.** Navigasyon, tema, i18n, loglama ve çok-profilli geliştirme kurulumu hazır.
+**Faz 1 — Kimlik + Veritabanı tamamlandı.**
+
+- Faz 0: navigasyon, tema, i18n, loglama, çok-profilli geliştirme kurulumu
+- Faz 1: SQLite şeması + migration altyapısı, kalıcı ayarlar, Ed25519 cihaz
+  kimliği (OS keychain'de saklanır), fingerprint görüntüleme
+
 Ağ katmanı (QUIC), keşif (mDNS), eşleştirme ve transfer henüz yok.
 
 ## Gereksinimler

@@ -41,12 +41,21 @@ export const tr = {
   // Ayarlar
   "settings.title": "Ayarlar",
   "settings.section.general": "Genel",
+  "settings.section.security": "Gizlilik ve Güvenlik",
   "settings.section.advanced": "Gelişmiş",
   "settings.theme": "Tema",
   "settings.theme.desc": "Uygulamanın görünümü",
   "settings.theme.system": "Sistemi takip et",
   "settings.theme.light": "Açık",
   "settings.theme.dark": "Koyu",
+  "settings.fingerprint": "Bu cihazın kimliği",
+  "settings.fingerprint.desc":
+    "Karşı tarafla eşleşirken bu kodu karşılaştırarak doğrulama yapabilirsiniz",
+  "settings.keyStorage": "Kimlik anahtarı",
+  "settings.keyStorage.osKeychain": "İşletim sisteminin parola kasasında",
+  "settings.keyStorage.plainFile": "Veri klasöründeki dosyada",
+  "settings.keyStorage.plainFile.warning":
+    "Anahtarınız sistem kasasına yazılamadı, veri klasöründeki bir dosyada tutuluyor. Diske erişebilen bir yazılım bu anahtarı okuyabilir.",
   "settings.version": "Sürüm",
   "settings.profile": "Geliştirme profili",
   "settings.profile.none": "Yok (varsayılan)",
@@ -67,6 +76,7 @@ export const tr = {
 
   // Hata kodları — Rust tarafındaki AppError::code() ile birebir eşleşir.
   "error.io": "Dosya işlemi başarısız oldu.",
+  "error.db": "Veritabanı işlemi başarısız oldu.",
   "error.settingNotFound": "Ayar bulunamadı.",
   "error.invalidInput": "Geçersiz istek.",
   "error.internal": "Beklenmeyen bir hata oluştu.",

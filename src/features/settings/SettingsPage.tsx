@@ -1,7 +1,17 @@
-import { Palette, Info, FolderOpen, HardDrive, Network, FlaskConical } from "lucide-react";
+import {
+  Palette,
+  Info,
+  FolderOpen,
+  HardDrive,
+  Network,
+  FlaskConical,
+  Fingerprint,
+  KeyRound,
+} from "lucide-react";
 import { t } from "../../i18n";
 import { Card, PageHeader, SectionTitle, SettingRow } from "../../components/Surface";
 import { Button } from "../../components/Button";
+import { Callout } from "../../components/Callout";
 import { SegmentedControl } from "../../components/SegmentedControl";
 import { useUiStore, type ThemePreference } from "../../stores/uiStore";
 import { useAppStore } from "../../stores/appStore";
@@ -16,7 +26,11 @@ const themeOptions: readonly { value: ThemePreference; label: string }[] = [
 export function SettingsPage() {
   const themePreference = useUiStore((s) => s.themePreference);
   const setThemePreference = useUiStore((s) => s.setThemePreference);
+  const savingTheme = useUiStore((s) => s.savingTheme);
+  const themeError = useUiStore((s) => s.error);
+
   const info = useAppStore((s) => s.info);
+  const identity = useAppStore((s) => s.identity);
   const loading = useAppStore((s) => s.loading);
   const error = useAppStore((s) => s.error);
 
@@ -26,12 +40,15 @@ export function SettingsPage() {
     return loading ? t("common.loading") : (error ?? t("error.unknown"));
   };
 
+  const keyInFile = identity?.storage === "plainFile";
+
   return (
     <>
       <PageHeader title={t("settings.title")} />
       <div className="flex-1 space-y-6 overflow-y-auto px-6 pb-6">
-        <section>
+        <section className="space-y-2">
           <SectionTitle>{t("settings.section.general")}</SectionTitle>
+          {themeError ? <Callout tone="warning">{themeError}</Callout> : null}
           <Card>
             <SettingRow
               icon={<Palette size={18} />}
@@ -42,8 +59,43 @@ export function SettingsPage() {
                   ariaLabel={t("settings.theme")}
                   value={themePreference}
                   options={themeOptions}
-                  onChange={setThemePreference}
+                  onChange={(preference) => void setThemePreference(preference)}
+                  disabled={savingTheme}
                 />
+              }
+            />
+          </Card>
+        </section>
+
+        <section className="space-y-2">
+          <SectionTitle>{t("settings.section.security")}</SectionTitle>
+          {keyInFile ? (
+            <Callout tone="warning">{t("settings.keyStorage.plainFile.warning")}</Callout>
+          ) : null}
+          <Card>
+            <SettingRow
+              icon={<Fingerprint size={18} />}
+              title={t("settings.fingerprint")}
+              description={t("settings.fingerprint.desc")}
+            />
+            {identity ? (
+              <div className="px-4 pb-4">
+                <code className="lu-selectable block rounded-lu-sm border border-stroke bg-layer-alt px-3 py-2 font-mono text-[length:var(--lu-text-caption)] leading-relaxed break-all">
+                  {identity.fingerprint}
+                </code>
+              </div>
+            ) : null}
+            <SettingRow
+              icon={<KeyRound size={18} />}
+              title={t("settings.keyStorage")}
+              description={
+                identity
+                  ? t(
+                      identity.storage === "osKeychain"
+                        ? "settings.keyStorage.osKeychain"
+                        : "settings.keyStorage.plainFile",
+                    )
+                  : t("common.loading")
               }
             />
           </Card>
@@ -82,9 +134,7 @@ export function SettingsPage() {
               title={t("settings.logs")}
               description={t("settings.logs.desc")}
               control={
-                <Button onClick={() => void api.openLogDir()}>
-                  {t("settings.logs.open")}
-                </Button>
+                <Button onClick={() => void api.openLogDir()}>{t("settings.logs.open")}</Button>
               }
             />
           </Card>

@@ -1,6 +1,8 @@
 mod cli;
 mod commands;
+mod db;
 mod error;
+mod identity;
 mod logging;
 mod paths;
 mod state;
@@ -18,6 +20,9 @@ pub fn run() {
     // Guard, uygulama kapanana kadar yaşamalı — düşerse log yazımı durur.
     let _log_guard = logging::init(&paths, cli.log_level.as_deref());
 
+    let db = db::open(&paths.db_path).expect("veritabanı açılamadı");
+    let identity = identity::load_or_create(&paths).expect("cihaz kimliği hazırlanamadı");
+
     let window_title = match &paths.profile {
         Some(p) => format!("LinkUp ({})", p.to_uppercase()),
         None => "LinkUp".to_string(),
@@ -25,7 +30,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .manage(AppState::new(paths))
+        .manage(AppState::new(paths, db, identity))
         .setup(move |app| {
             use tauri::Manager;
             if let Some(window) = app.get_webview_window("main") {
@@ -35,6 +40,9 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
+            commands::identity_info,
+            commands::get_settings,
+            commands::set_setting,
             commands::open_log_dir
         ])
         .run(tauri::generate_context!())

@@ -11,11 +11,13 @@ export function SegmentedControl<T extends string>({
   options,
   onChange,
   ariaLabel,
+  disabled = false,
 }: {
   value: T;
   options: readonly Option<T>[];
   onChange: (value: T) => void;
   ariaLabel: string;
+  disabled?: boolean;
 }) {
   return (
     <div
@@ -31,9 +33,11 @@ export function SegmentedControl<T extends string>({
             type="button"
             role="radio"
             aria-checked={selected}
+            disabled={disabled}
             onClick={() => onChange(option.value)}
             className={cn(
               "h-7 rounded-[3px] px-3 text-[length:var(--lu-text-body)]",
+              "disabled:pointer-events-none disabled:opacity-60",
               "transition-colors duration-[var(--lu-dur-fast)] ease-[var(--lu-ease)]",
               selected
                 ? "bg-accent text-on-accent"
