@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { AppSidebar } from "./AppSidebar";
+import { TitleBar } from "./TitleBar";
 import { ConversationList } from "../features/chat/ConversationList";
 import { PairingDialog } from "../features/devices/PairingDialog";
 import { TransferRequestDialog } from "../features/transfer/TransferRequestDialog";
@@ -19,11 +20,16 @@ export function AppShell({ children }: { children: ReactNode }) {
   const inChat = useLocation().pathname.startsWith("/chats");
 
   return (
-    <div className="flex h-full w-full overflow-hidden bg-base">
-      {inChat ? <ConversationList /> : <AppSidebar />}
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-tl-lu-lg border-t border-l border-stroke bg-layer">
-        {children}
-      </main>
+    // Pencere `decorations: false`: başlık çubuğu bize ait, o yüzden dikey
+    // yığın en üstte onunla başlıyor.
+    <div className="flex h-full w-full flex-col overflow-hidden bg-base">
+      <TitleBar />
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {inChat ? <ConversationList /> : <AppSidebar />}
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-tl-lu-lg border-t border-l border-stroke bg-layer">
+          {children}
+        </main>
+      </div>
       {/* Eşleştirme ve dosya istekleri hangi ekranda olursak olalım öne çıkmalı. */}
       <PairingDialog />
       <TransferRequestDialog />

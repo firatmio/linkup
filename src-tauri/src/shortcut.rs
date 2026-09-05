@@ -74,10 +74,14 @@ pub fn open_quick_send(app: &AppHandle) {
         WebviewUrl::App("index.html#/quick-send".into()),
     )
     .title("LinkUp — Hızlı Gönder")
-    .inner_size(420.0, 380.0)
+    .inner_size(420.0, 420.0)
     .resizable(false)
     .always_on_top(true)
     .center()
+    // Kendi başlık çubuğu var: bu pencere sistem çerçevesi taşıyacak kadar
+    // büyük değil, kullanıcı onu tuşla açıp saniyeler içinde kapatıyor.
+    .decorations(false)
+    .shadow(true)
     // Görev çubuğunda ikinci bir giriş oluşturmaz: bu bir araç penceresi,
     // uygulamanın kendisi değil.
     .skip_taskbar(true)

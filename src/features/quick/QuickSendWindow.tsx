@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
-import { Monitor, Paperclip, Send, X } from "lucide-react";
-import { t } from "../../i18n";
+import { readText } from "@tauri-apps/plugin-clipboard-manager";
+import { Monitor, Paperclip, Send, X, ClipboardType } from "lucide-react";
+import { t, translateError } from "../../i18n";
 import { cn } from "../../lib/cn";
 import { Button } from "../../components/Button";
 import { Callout } from "../../components/Callout";
 import { api, type TrustedDevice } from "../../lib/tauri";
-import { translateError } from "../../i18n";
+
+/** Panodaki metnin önizlemede gösterilen en fazla uzunluğu. */
+const PREVIEW_LIMIT = 400;
 
 /**
  * Global kısayolun açtığı küçük pencere (PLAN.md §2.11).
@@ -16,17 +19,25 @@ import { translateError } from "../../i18n";
  * bağlanmıyor — bu pencere ana pencere hiç açılmadan da açılabilir ve o
  * store'ların abonelikleri burada gereksiz iş olurdu.
  *
+ * Açılışta PANO OKUNUR: kullanıcı çoğu zaman bir şeyi kopyaladıktan hemen
+ * sonra kısayola basıyor. Metin varsa doğrudan "gönder" olarak sunulur;
+ * kopyaladığı şeyi bir kez daha yapıştırmak zorunda kalması gereksiz bir adım
+ * olurdu. Pano dosya YOLU okunmuyor — Tauri eklentisi yalnızca metin ve görsel
+ * veriyor, dosya için platforma özel kod gerekiyor (PLAN.md §2.9, Faz 9).
+ *
  * Yalnızca ÇEVRİMİÇİ cihazlar listeleniyor: çevrimdışı bir cihaza dosya
  * gönderilemez, listede göstermek başarısız olacak bir seçim sunmak olurdu.
  */
 export function QuickSendWindow() {
   const [devices, setDevices] = useState<TrustedDevice[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [clipboard, setClipboard] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [sending, setSending] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+
     void api
       .quickSendDevices()
       .then((list) => {
@@ -38,6 +49,15 @@ export function QuickSendWindow() {
       .catch((err) => {
         if (!cancelled) setError(translateError(err));
       });
+
+    // Pano boş veya erişilemez olabilir; ikisi de hata değil, sadece
+    // "gönderilecek metin yok" demek.
+    void readText()
+      .then((text) => {
+        if (!cancelled && text?.trim()) setClipboard(text);
+      })
+      .catch(() => {});
+
     return () => {
       cancelled = true;
     };
@@ -54,46 +74,69 @@ export function QuickSendWindow() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const pickAndSend = async () => {
-    if (!selected) return;
-
-    const chosen = await openFileDialog({ multiple: true });
-    if (!chosen) return;
-
-    setSending(true);
+  const run = async (action: () => Promise<void>) => {
+    setBusy(true);
     setError(null);
     try {
-      for (const path of Array.isArray(chosen) ? chosen : [chosen]) {
-        await api.sendFile(selected, path);
-      }
+      await action();
       close();
     } catch (err) {
-      setError(translateError(err));
-      setSending(false);
+      // İptal bir hata değil: kullanıcı dosya seçicisinden vazgeçtiyse
+      // pencere açık kalır ve hiçbir uyarı gösterilmez.
+      if (!(err instanceof CancelledError)) setError(translateError(err));
+      setBusy(false);
     }
   };
 
+  const sendClipboard = () =>
+    run(async () => {
+      if (!selected || !clipboard) return;
+      await api.sendMessage(selected, clipboard, false);
+    });
+
+  const pickAndSend = () =>
+    run(async () => {
+      if (!selected) return;
+      const chosen = await openFileDialog({ multiple: true });
+      // Kullanıcı seçiciyi iptal etti: pencere kapanmamalı.
+      if (!chosen) throw new CancelledError();
+
+      for (const path of Array.isArray(chosen) ? chosen : [chosen]) {
+        await api.sendFile(selected, path);
+      }
+    });
+
   return (
-    <div className="flex h-screen flex-col bg-base text-fg">
+    // Tüm yüzey sürüklenebilir. `data-tauri-drag-region` yalnızca özniteliğin
+    // BULUNDUĞU elemanda sürükleme başlatır, dolayısıyla üstteki düğmeler ve
+    // liste normal şekilde tıklanmaya devam eder.
+    <div
+      data-tauri-drag-region
+      className="flex h-screen flex-col bg-base text-fg select-none"
+    >
       <header
-        // Çerçevesiz değil ama başlık alanı yine de sürüklenebilir olsun.
         data-tauri-drag-region
         className="flex h-11 shrink-0 items-center justify-between border-b border-divider px-4"
       >
-        <span className="font-display text-[length:var(--lu-text-body)] font-semibold">
-          {t("quick.title")}
+        <span data-tauri-drag-region className="pointer-events-none min-w-0 truncate">
+          <span className="font-display text-[length:var(--lu-text-body)] font-semibold">
+            {t("app.name")}
+          </span>
+          <span className="ml-2 text-[length:var(--lu-text-caption)] text-fg-secondary">
+            {t("quick.title")}
+          </span>
         </span>
         <button
           type="button"
           onClick={close}
           aria-label={t("common.close")}
-          className="rounded-lu-sm p-1.5 text-fg-secondary hover:bg-hover hover:text-fg"
+          className="-mr-2 flex size-8 shrink-0 items-center justify-center rounded-lu-sm text-fg-secondary hover:bg-[#c42b1c] hover:text-white"
         >
           <X size={16} />
         </button>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
+      <div data-tauri-drag-region className="flex min-h-0 flex-1 flex-col gap-3 p-4">
         {error ? <Callout tone="warning">{error}</Callout> : null}
 
         {devices === null ? (
@@ -105,7 +148,7 @@ export function QuickSendWindow() {
             {t("quick.noDevices")}
           </p>
         ) : (
-          <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto">
+          <ul data-tauri-drag-region className="min-h-0 flex-1 space-y-1 overflow-y-auto">
             {devices.map((device) => (
               <li key={device.id}>
                 <button
@@ -130,15 +173,43 @@ export function QuickSendWindow() {
           </ul>
         )}
 
+        {clipboard ? (
+          <div className="shrink-0 space-y-1.5">
+            <p className="flex items-center gap-1.5 text-[length:var(--lu-text-caption)] text-fg-secondary">
+              <ClipboardType size={14} />
+              {t("quick.clipboard")}
+            </p>
+            <p className="lu-selectable max-h-20 overflow-y-auto rounded-lu-sm border border-stroke bg-layer-alt px-2.5 py-2 text-[length:var(--lu-text-caption)] break-words whitespace-pre-wrap">
+              {clipboard.slice(0, PREVIEW_LIMIT)}
+              {clipboard.length > PREVIEW_LIMIT ? "…" : ""}
+            </p>
+            <Button
+              variant="accent"
+              className="w-full"
+              icon={<Send size={16} />}
+              disabled={!selected || busy}
+              onClick={() => void sendClipboard()}
+            >
+              {t("quick.sendClipboard")}
+            </Button>
+          </div>
+        ) : null}
+
         <Button
-          variant="accent"
-          icon={sending ? <Send size={16} /> : <Paperclip size={16} />}
-          disabled={!selected || sending}
+          className="shrink-0"
+          icon={<Paperclip size={16} />}
+          disabled={!selected || busy}
           onClick={() => void pickAndSend()}
         >
-          {sending ? t("quick.sending") : t("quick.pick")}
+          {busy ? t("quick.sending") : t("quick.pick")}
         </Button>
       </div>
     </div>
   );
 }
+
+/**
+ * Dosya seçici iptal edildiğinde pencerenin kapanmasını engellemek için
+ * kullanılan işaret. Hata olarak GÖSTERİLMEZ: iptal bir hata değil.
+ */
+class CancelledError extends Error {}

@@ -287,6 +287,7 @@ Chunk başına hash **kullanılmaz**. QUIC/TLS 1.3 zaten her byte'ı authenticat
 
 - **Sürekli pano izleme yapılmaz** (gizlilik açısından hassas). Yalnızca kullanıcı chat kutusunda `Ctrl+V` yaptığında pano okunur.
 - Pano içeriği metin ise → mesaj kutusuna yapıştırılır. Görsel ise → görsel mesajı olarak gönderilmeye hazırlanır. **Dosya yolu ise** → `FileOffer` akışı tetiklenir.
+- **Uygulama durumu (Faz 8):** Hızlı gönder penceresi açılışta panodaki METNİ okuyup doğrudan "mesaj olarak gönder" seçeneği sunuyor. Kullanıcı çoğu zaman bir şeyi kopyaladıktan hemen sonra kısayola basıyor; kopyaladığını bir kez daha yapıştırtmak gereksiz bir adım. Dosya yolu okuma hâlâ Faz 9'da.
 - ⚠ **Fizibilite riski:** Tauri `clipboard-manager` plugin'i yalnızca metin ve görsel okur; **dosya yolu (Windows `CF_HDROP`) okumaz.** Bu özellik için platforma özel kod gerekir (Windows: `clipboard-win`; macOS: NSPasteboard; Linux: `text/uri-list`). **Faz 9'a girmeden önce spike ile doğrulanacak.** Doğrulanamazsa özellik metin + görselle sınırlanır ve dosya için sürükle-bırak yeterli sayılır.
 
 ### 2.10 Bildirimler
@@ -428,6 +429,8 @@ Eşleşmemiş cihazlardan dosya **hiçbir modda** kabul edilmez.
 - Tema sistemi takip eder (açık/koyu), ayarlardan manuel override edilebilir. Tailwind `dark:` + Tauri tema API'si.
 - **i18n:** tüm kullanıcı metinleri `src/i18n/tr.ts` sözlüğünde. Tip güvenli `t()` sarmalayıcı (anahtarlar TypeScript'te literal union olarak çıkarılır → eksik/yanlış anahtar derleme hatası verir). v1'de yalnızca `tr` yüklenir; ikinci dil eklemek tek dosya işidir.
 - Rust tarafındaki hata kodları da i18n anahtarlarına eşlenir — backend asla kullanıcıya gösterilecek metin üretmez.
+
+**Pencere çerçevesi (Faz 8):** Her iki pencere de `decorations: false` ile açılıyor ve başlık çubuğu uygulamaya ait. Ana pencerede Windows'un kendi ölçüleriyle (32 px yükseklik, 46×32 px düğmeler, kapatmada kırmızı vurgu) küçült/büyüt/kapat; hızlı gönder penceresinde yalnızca uygulama adı ve kapat. Hızlı gönder penceresinin TAMAMI sürüklenebilir: `data-tauri-drag-region` yalnızca özniteliğin bulunduğu elemanda sürükleme başlattığı için düğmeler ve liste tıklanabilir kalıyor.
 
 ### 3.2 Navigasyon
 
