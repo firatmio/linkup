@@ -129,6 +129,25 @@ export const tr = {
   "files.status.paused": "Duraklatıldı",
   "files.status.active": "Aktarılıyor",
   "files.status.pending": "Bekliyor",
+  "files.search": "Dosya ara",
+  "files.search.placeholder": "Dosya adı ara…",
+  "files.filter.all": "Tümü",
+  "files.filter.image": "Görsel",
+  "files.filter.document": "Belge",
+  "files.filter.other": "Diğer",
+  "files.noResults.title": "Eşleşen dosya yok",
+  "files.noResults.body": "Arama veya filtreyi değiştirmeyi deneyin.",
+  "files.recent": "Son gelen medyalar",
+  "files.info.title": "Dosya Bilgisi",
+  "files.info.sender": "Gönderen",
+  "files.info.size": "Boyut",
+  "files.info.received": "Alınma",
+  "files.info.duration": "Süre",
+  "files.info.path": "Konum",
+  "files.info.unknownDevice": "Bilinmeyen cihaz",
+  "files.delete": "Sil",
+  "files.delete.confirm.title": "Dosya silinsin mi?",
+  "files.delete.confirm.body": "{name} diskten kalıcı olarak silinecek ve geçmişten kaldırılacak. Bu işlem geri alınamaz.",
   "files.empty.title": "Henüz dosya alınmadı",
   "files.empty.body": "Aldığınız dosyalar burada geçmişiyle birlikte listelenir.",
 
@@ -170,6 +189,7 @@ export const tr = {
   // Genel
   "common.loading": "Yükleniyor…",
   "common.close": "Kapat",
+  "common.cancel": "Vazgeç",
   "common.comingSoon": "Bu bölüm sonraki fazlarda geliyor.",
 
   // Hata kodları — Rust tarafındaki AppError::code() ile birebir eşleşir.

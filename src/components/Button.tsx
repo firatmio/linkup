@@ -1,7 +1,7 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { cn } from "../lib/cn";
 
-type Variant = "standard" | "accent" | "subtle";
+type Variant = "standard" | "accent" | "subtle" | "danger";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
@@ -19,6 +19,11 @@ const variants: Record<Variant, string> = {
     "bg-accent text-on-accent border border-transparent hover:bg-accent-hover active:bg-accent-press active:opacity-80",
   subtle:
     "bg-transparent text-fg border border-transparent hover:bg-hover active:bg-press active:text-fg-secondary",
+  // Geri alınamaz işlemler: kullanıcı ne yaptığını rengiyle de görmeli.
+  // Dolgu yerine çerçeve, çünkü `--lu-danger` açık temada koyu kırmızı, koyu
+  // temada açık pembe — tek bir metin rengi ikisinin üstünde de okunmazdı.
+  danger:
+    "bg-transparent text-danger border border-danger hover:bg-[color-mix(in_srgb,var(--lu-danger)_14%,transparent)] active:bg-[color-mix(in_srgb,var(--lu-danger)_22%,transparent)]",
 };
 
 export function Button({

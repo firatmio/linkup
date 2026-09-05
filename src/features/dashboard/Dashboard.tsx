@@ -5,12 +5,12 @@ import { Callout } from "../../components/Callout";
 import { usePairingStore } from "../../stores/pairingStore";
 import { useDeviceStore } from "../../stores/deviceStore";
 import { DeviceSummaryCard } from "./DeviceSummaryCard";
+import { RecentMedia } from "./RecentMedia";
 
 /**
  * Uygulamanın açılış ekranı (PLAN.md §3.2).
  *
- * "Aktif Transferler" ve "Son Gelen Medyalar" şeritleri Faz 7 ve 8'de,
- * gösterecekleri veri var olduğunda eklenecek — boş bir başlık göstermek
+ * Şeritler yalnızca gösterecek verileri varken görünür: boş bir başlık,
  * ekranı doldurmaktan başka bir işe yaramaz.
  */
 export function Dashboard() {
@@ -74,6 +74,8 @@ export function Dashboard() {
             </div>
           )}
         </section>
+
+        <RecentMedia />
       </div>
     </>
   );

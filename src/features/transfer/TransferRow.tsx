@@ -12,9 +12,12 @@ import type { Transfer, TransferProgress } from "../../lib/tauri";
 export function TransferRow({
   transfer,
   progress,
+  onSelect,
 }: {
   transfer: Transfer;
   progress?: TransferProgress;
+  /** Verilirse satır tıklanabilir olur ve dosya bilgi ekranını açar. */
+  onSelect?: () => void;
 }) {
   const incoming = transfer.direction === "in";
   const done = transfer.status === "done";
@@ -30,7 +33,28 @@ export function TransferRow({
     : null;
 
   return (
-    <li className="group flex items-center gap-3 border-b border-divider px-4 py-3 last:border-b-0">
+    <li
+      onClick={onSelect}
+      // Satır içinde zaten düğmeler var; sarmalayıcıyı `<button>` yapmak
+      // iç içe düğme demek olurdu. Klavye erişimi bu yüzden elle veriliyor.
+      role={onSelect ? "button" : undefined}
+      tabIndex={onSelect ? 0 : undefined}
+      onKeyDown={
+        onSelect
+          ? (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onSelect();
+              }
+            }
+          : undefined
+      }
+      className={cn(
+        "group flex items-center gap-3 border-b border-divider px-4 py-3 last:border-b-0",
+        onSelect &&
+          "cursor-pointer transition-colors hover:bg-hover focus-visible:bg-hover focus-visible:outline-none",
+      )}
+    >
       <span className="relative shrink-0">
         <span className="flex size-9 items-center justify-center rounded-lu-sm bg-layer-alt">
           <File size={18} className="text-fg-secondary" />
@@ -94,7 +118,10 @@ export function TransferRow({
             type="button"
             aria-label={t("files.open")}
             title={t("files.open")}
-            onClick={() => void api.openTransferFile(transfer.transferId)}
+            onClick={(event) => {
+              event.stopPropagation();
+              void api.openTransferFile(transfer.transferId);
+            }}
             className="rounded-lu-sm p-1.5 text-fg-secondary hover:bg-hover hover:text-fg"
           >
             <ExternalLink size={16} />
@@ -103,7 +130,10 @@ export function TransferRow({
             type="button"
             aria-label={t("files.reveal")}
             title={t("files.reveal")}
-            onClick={() => void api.revealTransferFile(transfer.transferId)}
+            onClick={(event) => {
+              event.stopPropagation();
+              void api.revealTransferFile(transfer.transferId);
+            }}
             className="rounded-lu-sm p-1.5 text-fg-secondary hover:bg-hover hover:text-fg"
           >
             <FolderOpen size={16} />

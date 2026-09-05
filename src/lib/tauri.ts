@@ -280,7 +280,10 @@ export const api = {
   sendFile: (id: string, path: string) => invoke<string>("send_file", { id, path }),
   respondToTransfer: (transferId: string, accept: boolean) =>
     invoke<boolean>("respond_to_transfer", { transferId, accept }),
-  incomingFiles: (limit?: number) => invoke<Transfer[]>("incoming_files", { limit }),
+  incomingFiles: (limit?: number, query?: string) =>
+    invoke<Transfer[]>("incoming_files", { limit, query }),
+  deleteTransferFile: (transferId: string) =>
+    invoke<void>("delete_transfer_file", { transferId }),
   activeTransfers: () => invoke<Transfer[]>("active_transfers"),
   openTransferFile: (transferId: string) =>
     invoke<void>("open_transfer_file", { transferId }),

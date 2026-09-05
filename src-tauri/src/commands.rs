@@ -331,9 +331,32 @@ pub fn respond_to_transfer(state: State<'_, AppState>, transfer_id: String, acce
 
 /// Alınan dosyaların geçmişi (PLAN.md §3.2 "Gelen Dosyalar").
 #[tauri::command]
-pub fn incoming_files(state: State<'_, AppState>, limit: Option<u32>) -> AppResult<Vec<Transfer>> {
+pub fn incoming_files(
+    state: State<'_, AppState>,
+    limit: Option<u32>,
+    query: Option<String>,
+) -> AppResult<Vec<Transfer>> {
     let conn = state.db.get().map_err(pool_error)?;
-    transfers::list_incoming(&conn, limit.unwrap_or(500))
+    transfers::list_incoming(&conn, limit.unwrap_or(500), query.as_deref())
+}
+
+/// Alınan bir dosyayı diskten siler ve kaydı geçmişten düşürür.
+///
+/// Geri alınamaz bir işlem; onayı arayüz alır. Kayıt, dosya silinemese bile
+/// düşürülmez: kullanıcıya "sildim" deyip dosyayı bırakmak, en kötü sonuç.
+#[tauri::command]
+pub fn delete_transfer_file(state: State<'_, AppState>, transfer_id: String) -> AppResult<()> {
+    let path = transfer_path(&state, &transfer_id)?;
+    std::fs::remove_file(&path)
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("dosya silinemedi: {e}")))?;
+
+    let conn = state.db.get().map_err(pool_error)?;
+    transfers::remove(&conn, &transfer_id)?;
+    let _ = state
+        .transfers
+        .app
+        .emit(crate::transfer::engine::EVENT_CHANGED, ());
+    Ok(())
 }
 
 /// Sürmekte olan transferler — ilerleme paneli için.

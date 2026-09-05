@@ -15,24 +15,28 @@ interface TransferState {
   incoming: Transfer[];
   /** Anlık ilerleme — veritabanına her saniye yazmak yerine bellekte tutulur. */
   progress: Record<string, TransferProgress>;
+  /** Gelen dosyalar ekranındaki arama. Listeyi backend süzer. */
+  search: string;
   error: string | null;
 
   load: () => Promise<void>;
+  setQuery: (query: string) => Promise<void>;
   send: (deviceId: string, path: string) => Promise<boolean>;
   clearError: () => void;
 }
 
-export const useTransferStore = create<TransferState>((set) => ({
+export const useTransferStore = create<TransferState>((set, get) => ({
   active: [],
   incoming: [],
   progress: {},
+  search: "",
   error: null,
 
   load: async () => {
     try {
       const [active, incoming] = await Promise.all([
         api.activeTransfers(),
-        api.incomingFiles(),
+        api.incomingFiles(undefined, get().search),
       ]);
       // İlerleme kayıtları sonlanan aktarımlarla birlikte atılır: kalan bir
       // kayıt, veritabanında artık var olmayan bir aktarımı %100 dolu bir
@@ -49,6 +53,11 @@ export const useTransferStore = create<TransferState>((set) => ({
     } catch (err) {
       set({ error: translateError(err) });
     }
+  },
+
+  setQuery: async (query) => {
+    set({ search: query });
+    await get().load();
   },
 
   send: async (deviceId, path) => {

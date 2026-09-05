@@ -61,3 +61,18 @@ export function remainingTime(bytesLeft: number, bytesPerSecond: number): string
   if (seconds < HOUR) return `${Math.ceil(seconds / MINUTE)} dk`;
   return `${Math.round((seconds / HOUR) * 10) / 10} sa`.replace(".", ",");
 }
+
+/**
+ * Aktarımın ne kadar sürdüğü. Başlangıç ve bitiş aynı saniyeye düşerse
+ * "0 sn" yerine "1 sn'den kısa" denir: sıfır süre yanlış bir kesinlik iddiası.
+ */
+export function duration(startedAt: number, completedAt: number | null): string | null {
+  if (!completedAt) return null;
+
+  const seconds = completedAt - startedAt;
+  if (seconds < 0) return null;
+  if (seconds < 1) return "1 sn'den kısa";
+  if (seconds < 60) return `${seconds} sn`;
+  if (seconds < HOUR) return `${Math.round(seconds / MINUTE)} dk`;
+  return `${Math.round((seconds / HOUR) * 10) / 10} sa`.replace(".", ",");
+}

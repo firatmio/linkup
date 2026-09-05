@@ -201,13 +201,53 @@ pub fn get_many(conn: &Connection, transfer_ids: &[&str]) -> AppResult<Vec<Trans
 }
 
 /// Alınan dosyaların geçmişi (PLAN.md §3.2 "Gelen Dosyalar").
-pub fn list_incoming(conn: &Connection, limit: u32) -> AppResult<Vec<Transfer>> {
+///
+/// `query` verilirse dosya adında geçenler süzülür.
+///
+/// Süzme SQL'de değil Rust'ta: SQLite'ın `LOWER`ı yalnızca ASCII'yi çevirir,
+/// dolayısıyla "İSTANBUL" araması "İstanbul.pdf"i bulamazdı.
+pub fn list_incoming(
+    conn: &Connection,
+    limit: u32,
+    query: Option<&str>,
+) -> AppResult<Vec<Transfer>> {
     let mut stmt = conn.prepare(&format!(
         "{SELECT_COLUMNS} WHERE direction = 'in' ORDER BY started_at DESC LIMIT ?1"
     ))?;
     let rows = stmt.query_map([limit], row_to_transfer)?;
-    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    let all = rows.collect::<Result<Vec<_>, _>>()?;
+
+    let Some(needle) = query.map(|q| fold(q.trim())).filter(|q| !q.is_empty()) else {
+        return Ok(all);
+    };
+    Ok(all
+        .into_iter()
+        .filter(|transfer| fold(&transfer.file_name).contains(&needle))
+        .collect())
 }
+
+/// Aramayı Türkçe'nin i harfleri karşısında bağışlayıcı hâle getirir.
+///
+/// Rust'ın Unicode küçültmesi doğru ama arama için yetersiz: `'İ'` küçülünce
+/// `i` + birleşik nokta (U+0307) oluyor, yani kullanıcının yazdığı "istanbul"
+/// hiçbir zaman "İstanbul"u bulamıyor. Ayrıca `'I'` ASCII kuralıyla `i`ye,
+/// `'ı'` ise kendine dönüştüğü için noktalı/noktasız çift ikiye bölünüyor.
+///
+/// Burada dört varyant da (`i ı İ I`) `i`ye indirgeniyor. Bu, aramayı biraz
+/// fazla eşleştirir — "ırmak" araması "Irmak"ı da bulur — ama dosya adı
+/// aramasında fazladan sonuç, hiç sonuç bulamamaktan iyidir. Ş/ş, Ğ/ğ gibi
+/// ayrı harfler DOKUNULMADAN bırakılıyor; onları katlamak farklı kelimeleri
+/// birbirine karıştırırdı.
+fn fold(text: &str) -> String {
+    text.chars()
+        .flat_map(|c| c.to_lowercase())
+        .filter(|c| *c != COMBINING_DOT_ABOVE)
+        .map(|c| if c == 'ı' { 'i' } else { c })
+        .collect()
+}
+
+/// `'İ'` küçültüldüğünde ortaya çıkan birleşik nokta.
+const COMBINING_DOT_ABOVE: char = '\u{0307}';
 
 /// Sürmekte olan transferler — arayüzdeki ilerleme paneli için.
 pub fn list_active(conn: &Connection) -> AppResult<Vec<Transfer>> {
@@ -281,6 +321,14 @@ pub fn fail_stale(conn: &Connection) -> AppResult<usize> {
             crate::db::devices::now(),
         ],
     )?)
+}
+
+/// Tek bir kaydı siler (dosyası silinen aktarım).
+pub fn remove(conn: &Connection, transfer_id: &str) -> AppResult<bool> {
+    Ok(conn.execute(
+        "DELETE FROM transfers WHERE transfer_id = ?1",
+        [transfer_id],
+    )? > 0)
 }
 
 /// Sonlanmış kayıtları listeden temizler. Dosyalar silinmez.
@@ -506,6 +554,57 @@ mod tests {
         );
     }
 
+    /// Türkçe'nin en sinsi arama tuzağı: `'İ'` küçülünce `i` + birleşik
+    /// nokta oluyor, düz karşılaştırma "istanbul"u eşleştiremiyor.
+    #[test]
+    fn dosya_adinda_arama_buyuk_kucuk_harf_duyarsizdir() {
+        let pool = setup();
+        let conn = pool.get().unwrap();
+
+        let mut a = new("t1", true);
+        a.file_name = "İstanbul Raporu.pdf";
+        insert(&conn, a).unwrap();
+        let mut b = new("t2", true);
+        b.file_name = "tatil.jpg";
+        insert(&conn, b).unwrap();
+
+        let found = list_incoming(&conn, 50, Some("istanbul")).unwrap();
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].transfer_id, "t1");
+
+        assert_eq!(
+            list_incoming(&conn, 50, Some("İSTANBUL")).unwrap().len(),
+            1,
+            "sorgunun kendisi de büyük harfli olabilir"
+        );
+        assert_eq!(
+            list_incoming(&conn, 50, Some("   ")).unwrap().len(),
+            2,
+            "boş arama süzmemeli"
+        );
+    }
+
+    #[test]
+    fn katlama_noktali_noktasiz_i_ayrimini_kaldirir() {
+        assert_eq!(fold("İstanbul"), "istanbul");
+        assert_eq!(fold("IRMAK"), "irmak");
+        assert_eq!(fold("ırmak"), "irmak");
+        // Ayrı harfler korunur: bunları katlamak farklı kelimeleri karıştırır.
+        assert_eq!(fold("Şeker"), "şeker");
+        assert_eq!(fold("ÇĞÖÜ"), "çğöü");
+    }
+
+    #[test]
+    fn silinen_kayit_gecmisten_duser() {
+        let pool = setup();
+        let conn = pool.get().unwrap();
+        insert(&conn, new("t1", true)).unwrap();
+
+        assert!(remove(&conn, "t1").unwrap());
+        assert!(get(&conn, "t1").unwrap().is_none());
+        assert!(!remove(&conn, "t1").unwrap(), "ikinci silme etkisiz olmalı");
+    }
+
     #[test]
     fn gelen_ve_aktif_listeleri_ayrisir() {
         let pool = setup();
@@ -515,7 +614,7 @@ mod tests {
         insert(&conn, new("out1", false)).unwrap();
         set_status(&conn, "in1", TransferStatus::Done, None).unwrap();
 
-        let incoming = list_incoming(&conn, 50).unwrap();
+        let incoming = list_incoming(&conn, 50, None).unwrap();
         assert_eq!(incoming.len(), 1);
         assert_eq!(incoming[0].transfer_id, "in1");
 
