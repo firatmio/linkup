@@ -626,7 +626,7 @@ Her fazın sonunda **çalışan ve elle doğrulanabilir** bir çıktı vardır.
 | **8 — Gelen Dosyalar + Tray** | Dosya geçmişi + filtre/arama · dosya bilgi modalı · son medyalar şeridi · ~~native bildirim + tıklama~~ (Faz 7'de tamamlandı; Windows dışı yönlendirme kaldı) · tray · single-instance · autostart · global kısayol + hızlı gönder popup | Uygulama tray'de yaşıyor; bildirim geliyor ve tıklayınca doğru ekran açılıyor |
 | **9 — Arama + Pano** | FTS5 arama (sohbet içi + global) · Türkçe tokenizer doğrulaması · **pano dosya spike'ı** → `Ctrl+V` akışı | Arama çalışıyor; pano özelliği ya çalışıyor ya da kapsamı dürüstçe daraltıldı |
 | **10 — Klasör senkronizasyonu** | Klasör seçimi · manifest karşılaştırma · `notify` + debounce + periyodik tarama · çakışma yönetimi · ignore desenleri | İki cihaz arasında klasör senkron kalıyor; çakışma kaybolmadan yan yana kaydediliyor |
-| **11 — Cilalama + dağıtım** | Hata mesajlarının tamamlanması · boş/hata durumları · ayarlar sayfasının tamamı · performans testleri · installer + firewall kuralı · updater · imzalama/notarization | Kurulabilir sürüm çıkıyor, temiz bir makinede çalışıyor |
+| **11 — Cilalama + dağıtım** | Hata mesajlarının tamamlanması · **bozuk veritabanı kurtarma** (şu an açılışta panikle çöküyor, kullanıcı hiçbir mesaj görmüyor — Faz 8 sırasında süreç zorla sonlandırıldığında gerçekten yaşandı) · boş/hata durumları · ayarlar sayfasının tamamı · performans testleri · installer + firewall kuralı · updater · imzalama/notarization | Kurulabilir sürüm çıkıyor, temiz bir makinede çalışıyor |
 | **12 — (ileride) İnternet üzerinden** | Relay sunucu tasarımı · NAT traversal (hole punching) · hesap sistemi · uzaktan pairing onayı | — |
 
 **Bağımlılık notları:**
