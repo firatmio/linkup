@@ -13,6 +13,7 @@ use crate::error::{AppError, AppResult};
 use crate::identity::KeyStorage;
 use crate::network::protocol::{ContentType, ControlMessage};
 use crate::state::AppState;
+use crate::transfer::preview;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -356,6 +357,41 @@ pub fn reveal_transfer_file(state: State<'_, AppState>, transfer_id: String) -> 
     let path = transfer_path(&state, &transfer_id)?;
     tauri_plugin_opener::reveal_item_in_dir(path)
         .map_err(|e| AppError::Internal(anyhow::anyhow!("klasör açılamadı: {e}")))
+}
+
+/// Tamamlanmış bir aktarımın görsel önizlemesini üretir.
+///
+/// Görsel olmayan dosyalar için `None` döner — hata değil: arayüz her dosya
+/// için soruyor, PDF'e önizleme yok diye hata göstermek yanlış olurdu.
+///
+/// Küçültme pahalı bir iştir (büyük bir fotoğrafta yüz milisaniyeler); bu
+/// yüzden bloklayan iş ayrı bir thread'e alınıyor, aksi hâlde sohbeti
+/// kaydırmak arayüzü dondururdu.
+#[tauri::command]
+pub async fn transfer_preview(
+    state: State<'_, AppState>,
+    transfer_id: String,
+    max_edge: Option<u32>,
+) -> AppResult<Option<crate::transfer::preview::Preview>> {
+    let path = {
+        let conn = state.db.get().map_err(pool_error)?;
+        let Some(record) = transfers::get(&conn, &transfer_id)? else {
+            return Ok(None);
+        };
+        if record.status != "done" || !preview::looks_like_image(&record.file_name) {
+            return Ok(None);
+        }
+        match record.save_path {
+            Some(path) if std::path::Path::new(&path).exists() => path,
+            _ => return Ok(None),
+        }
+    };
+
+    let max_edge = max_edge.unwrap_or(320);
+    tokio::task::spawn_blocking(move || preview::thumbnail(std::path::Path::new(&path), max_edge))
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("önizleme görevi: {e}")))?
+        .map(Some)
 }
 
 fn transfer_path(state: &State<'_, AppState>, transfer_id: &str) -> AppResult<String> {

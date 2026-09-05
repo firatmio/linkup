@@ -135,6 +135,15 @@ export interface Transfer {
   completedAt: number | null;
 }
 
+/** Aktarılan bir görselin küçük resmi. */
+export interface TransferPreview {
+  mime: string;
+  /** Base64 kodlu görsel verisi. */
+  data: string;
+  width: number;
+  height: number;
+}
+
 /** Gelen dosya onayı istendiğinde (PLAN.md §2.13.3). */
 export interface TransferRequest {
   transferId: string;
@@ -277,5 +286,7 @@ export const api = {
     invoke<void>("open_transfer_file", { transferId }),
   revealTransferFile: (transferId: string) =>
     invoke<void>("reveal_transfer_file", { transferId }),
+  transferPreview: (transferId: string, maxEdge?: number) =>
+    invoke<TransferPreview | null>("transfer_preview", { transferId, maxEdge }),
   openLogDir: () => invoke<void>("open_log_dir"),
 };

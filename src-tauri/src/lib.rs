@@ -156,6 +156,7 @@ pub fn run() {
             commands::respond_to_transfer,
             commands::set_device_auto_accept,
             commands::clear_finished_transfers,
+            commands::transfer_preview,
             commands::incoming_files,
             commands::active_transfers,
             commands::open_transfer_file,
