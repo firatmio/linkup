@@ -209,10 +209,13 @@ pub fn chat_history(
     state: State<'_, AppState>,
     id: String,
     limit: Option<u32>,
+    before_id: Option<i64>,
 ) -> AppResult<Vec<Message>> {
     let device_id = parse_device_id(&id)?;
     let conn = state.db.get().map_err(pool_error)?;
-    messages::list(&conn, &device_id, limit.unwrap_or(200), None)
+    // Varsayılan sayfa küçük tutuldu: sohbet açılışı, geçmişin uzunluğundan
+    // bağımsız olarak sabit maliyetli olmalı. Geri kalanı kaydırdıkça gelir.
+    messages::list(&conn, &device_id, limit.unwrap_or(60), before_id)
 }
 
 /// Metin mesajı gönderir.

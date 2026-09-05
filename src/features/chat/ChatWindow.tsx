@@ -8,7 +8,6 @@ import { Callout } from "../../components/Callout";
 import { MessageBubble } from "./MessageBubble";
 import { useChatStore } from "../../stores/chatStore";
 import { useTransferStore } from "../../stores/transferStore";
-import { TransferRow } from "../transfer/TransferRow";
 import { DeviceInfoDialog } from "../devices/DeviceInfoDialog";
 import type { ChatMessage, TrustedDevice } from "../../lib/tauri";
 
@@ -53,14 +52,9 @@ export function ChatWindow({ device }: { device: TrustedDevice }) {
   const [dropActive, setDropActive] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const sendFile = useTransferStore((s) => s.send);
-  const activeTransfers = useTransferStore((s) => s.active);
-  const progress = useTransferStore((s) => s.progress);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-
-  // Bu cihazla olan aktarımlar sohbetin altında görünür.
-  const transfers = activeTransfers.filter((item) => item.deviceId === device.id);
 
   // Sürükle-bırak (PLAN.md §3.3). Tarayıcının drop olayı Tauri'de dosya YOLU
   // vermez; yolu yalnızca webview'ın kendi olayı taşır.
@@ -185,18 +179,6 @@ export function ChatWindow({ device }: { device: TrustedDevice }) {
           })
         )}
       </div>
-
-      {transfers.length > 0 ? (
-        <ul className="shrink-0 border-t border-divider">
-          {transfers.map((transfer) => (
-            <TransferRow
-              key={transfer.transferId}
-              transfer={transfer}
-              progress={progress[transfer.transferId]}
-            />
-          ))}
-        </ul>
-      ) : null}
 
       <div className="shrink-0 space-y-2 px-5 pt-1 pb-4">
         {error ? <Callout tone="warning">{error}</Callout> : null}

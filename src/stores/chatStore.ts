@@ -3,20 +3,30 @@ import {
   api,
   onChatMessage,
   onChatStatus,
+  onTransferChanged,
   type ChatMessage,
 } from "../lib/tauri";
 import { translateError } from "../i18n";
 import { usePairingStore } from "./pairingStore";
 
+/** Bir sohbet açılırken çekilen mesaj sayısı. */
+const PAGE_SIZE = 60;
+
 interface ChatState {
   /** Cihaz kimliğine göre mesaj listeleri. */
   byDevice: Record<string, ChatMessage[]>;
+  /** Geçmişin başına ulaşılan sohbetler; boşuna sorgu atılmaz. */
+  atStart: Record<string, boolean>;
   /** Açık olan sohbet; okundu bildirimi buna göre gönderilir. */
   activeDeviceId: string | null;
   loading: boolean;
+  /** Geçmişe kaydırma sürüyor. */
+  loadingOlder: boolean;
   error: string | null;
 
   open: (deviceId: string) => Promise<void>;
+  /** Listenin başına gelindiğinde bir sayfa daha geçmiş yükler. */
+  loadOlder: (deviceId: string) => Promise<number>;
   close: () => void;
   /** Sohbet listesinden seçim; sidebar ile içerik bu değeri paylaşır. */
   select: (deviceId: string) => void;
@@ -57,22 +67,51 @@ function laterStatus(
 
 export const useChatStore = create<ChatState>((set, get) => ({
   byDevice: {},
+  atStart: {},
   activeDeviceId: null,
   loading: false,
+  loadingOlder: false,
   error: null,
 
   open: async (deviceId) => {
     set({ activeDeviceId: deviceId, loading: true, error: null });
     try {
-      const messages = await api.chatHistory(deviceId);
+      const messages = await api.chatHistory(deviceId, PAGE_SIZE);
       set((state) => ({
         byDevice: { ...state.byDevice, [deviceId]: messages },
+        // Bir sayfadan az geldiyse geçmişin tamamı elimizde.
+        atStart: { ...state.atStart, [deviceId]: messages.length < PAGE_SIZE },
         loading: false,
       }));
       // Sohbet açıldı: gelen mesajlar okundu sayılır ve karşı tarafa bildirilir.
       await api.markConversationRead(deviceId);
     } catch (err) {
       set({ loading: false, error: translateError(err) });
+    }
+  },
+
+  loadOlder: async (deviceId) => {
+    const state = get();
+    const current = state.byDevice[deviceId];
+    if (state.loadingOlder || state.atStart[deviceId] || !current?.length) return 0;
+
+    set({ loadingOlder: true });
+    try {
+      const older = await api.chatHistory(deviceId, PAGE_SIZE, current[0].id);
+      set((inner) => ({
+        byDevice: {
+          ...inner.byDevice,
+          // Araya yeni mesaj girmiş olabilir; birleştirme mevcut listeyi
+          // yeniden okuyarak yapılır, `current` üzerinden değil.
+          [deviceId]: [...older, ...(inner.byDevice[deviceId] ?? [])],
+        },
+        atStart: { ...inner.atStart, [deviceId]: older.length < PAGE_SIZE },
+        loadingOlder: false,
+      }));
+      return older.length;
+    } catch (err) {
+      set({ error: translateError(err), loadingOlder: false });
+      return 0;
     }
   },
 
@@ -112,6 +151,39 @@ export const useChatStore = create<ChatState>((set, get) => ({
   messagesOf: (deviceId) => get().byDevice[deviceId] ?? EMPTY,
 }));
 
+/**
+ * Açık sohbetteki dosya baloncuklarının aktarım kayıtlarını tazeler.
+ *
+ * Mesajların kendisi yeniden yüklenmez: kullanıcının kaydırdığı geçmiş
+ * silinmemeli. Yalnızca son sayfadaki `file_ref` kayıtlarının aktarım
+ * bilgisi güncellenir.
+ */
+async function refreshTransfers(deviceId: string): Promise<void> {
+  const messages = useChatStore.getState().byDevice[deviceId];
+  if (!messages?.some((m) => m.transferId)) return;
+
+  try {
+    const fresh = await api.chatHistory(deviceId, PAGE_SIZE);
+    const byTransfer = new Map(
+      fresh.filter((m) => m.transferId).map((m) => [m.transferId, m.transfer] as const),
+    );
+
+    useChatStore.setState((state) => ({
+      byDevice: {
+        ...state.byDevice,
+        [deviceId]: (state.byDevice[deviceId] ?? []).map((m) =>
+          m.transferId && byTransfer.has(m.transferId)
+            ? { ...m, transfer: byTransfer.get(m.transferId) ?? m.transfer }
+            : m,
+        ),
+      },
+    }));
+  } catch {
+    // Tazeleme başarısızsa baloncuk eski hâlinde kalır; kullanıcıya
+    // gösterilecek bir hata yok.
+  }
+}
+
 /** Gelen mesaj ve durum olaylarına abone olur. */
 export function subscribeToChat(): () => void {
   const unlisteners: Array<() => void> = [];
@@ -141,6 +213,15 @@ export function subscribeToChat(): () => void {
 
     // Cihaz listesindeki "son mesaj" ve okunmamış sayısı da tazelenmeli.
     void usePairingStore.getState().loadTrusted();
+  }).then(track);
+
+  // Aktarım ilerledikçe sohbetteki dosya baloncuğu da değişmeli. Baloncuk
+  // aktarımın durumunu kopyalamadığı için tek yol kaydı yeniden okumaktır;
+  // yalnızca AÇIK sohbet tazelenir, arka plandakiler zaten görünmüyor.
+  void onTransferChanged(() => {
+    const { activeDeviceId } = useChatStore.getState();
+    if (!activeDeviceId) return;
+    void refreshTransfers(activeDeviceId);
   }).then(track);
 
   void onChatStatus(({ deviceId, msgId, status }) => {

@@ -181,6 +181,25 @@ pub fn get(conn: &Connection, transfer_id: &str) -> AppResult<Option<Transfer>> 
     Ok(stmt.query_row([transfer_id], row_to_transfer).optional()?)
 }
 
+/// Birden çok aktarımı tek sorguda getirir.
+///
+/// Kimlik sayısı sorguya göre değiştiği için parametre yer tutucuları elle
+/// üretiliyor; değerler yine bağlanıyor, dizeye gömülmüyor.
+pub fn get_many(conn: &Connection, transfer_ids: &[&str]) -> AppResult<Vec<Transfer>> {
+    if transfer_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let placeholders = std::iter::repeat_n("?", transfer_ids.len())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let mut stmt = conn.prepare(&format!(
+        "{SELECT_COLUMNS} WHERE transfer_id IN ({placeholders})"
+    ))?;
+    let rows = stmt.query_map(rusqlite::params_from_iter(transfer_ids), row_to_transfer)?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+}
+
 /// Alınan dosyaların geçmişi (PLAN.md §3.2 "Gelen Dosyalar").
 pub fn list_incoming(conn: &Connection, limit: u32) -> AppResult<Vec<Transfer>> {
     let mut stmt = conn.prepare(&format!(

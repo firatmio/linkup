@@ -75,10 +75,16 @@ export interface TrustedDevice {
 
 /** Sohbet mesajı (PLAN.md §2.8). */
 export interface ChatMessage {
+  /** Yerel satır kimliği; yalnızca geçmişe kaydırmanın imleci. */
+  id: number;
   msgId: string;
   direction: "in" | "out";
   contentType: "text" | "code" | "image" | "file_ref";
   content: string;
+  /** `file_ref` mesajlarında ilgili aktarımın kimliği. */
+  transferId: string | null;
+  /** Aktarımın okuma anındaki hâli; durum kopyalanmaz, iliştirilir. */
+  transfer: Transfer | null;
   sentAt: number;
   status: "sending" | "sent" | "delivered" | "read" | "failed";
 }
@@ -256,8 +262,8 @@ export const api = {
   setDeviceAutoAccept: (id: string, enabled: boolean) =>
     invoke<void>("set_device_auto_accept", { id, enabled }),
   clearFinishedTransfers: () => invoke<number>("clear_finished_transfers"),
-  chatHistory: (id: string, limit?: number) =>
-    invoke<ChatMessage[]>("chat_history", { id, limit }),
+  chatHistory: (id: string, limit?: number, beforeId?: number) =>
+    invoke<ChatMessage[]>("chat_history", { id, limit, beforeId }),
   sendMessage: (id: string, body: string, isCode?: boolean) =>
     invoke<ChatMessage>("send_message", { id, body, isCode }),
   markConversationRead: (id: string) =>

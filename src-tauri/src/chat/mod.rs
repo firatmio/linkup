@@ -55,7 +55,7 @@ pub fn prepare_outgoing(
     let sent_at = crate::db::devices::now();
 
     let conn = db.get().map_err(pool_error)?;
-    messages::insert(
+    let id = messages::insert(
         &conn,
         NewMessage {
             msg_id: &msg_id,
@@ -63,16 +63,21 @@ pub fn prepare_outgoing(
             outgoing: true,
             content_type: content_type.as_str(),
             content: body,
+            transfer_id: None,
             sent_at,
             status: MessageStatus::Sending,
         },
-    )?;
+    )?
+    .ok_or_else(|| AppError::Internal(anyhow::anyhow!("mesaj kimliği çakıştı")))?;
 
     let stored = Message {
+        id,
         msg_id: msg_id.clone(),
         direction: "out".to_string(),
         content_type: content_type.as_str().to_string(),
         content: body.to_string(),
+        transfer_id: None,
+        transfer: None,
         sent_at,
         status: MessageStatus::Sending.as_str().to_string(),
     };
@@ -86,6 +91,74 @@ pub fn prepare_outgoing(
 
     Ok((stored, frame))
 }
+
+/// Bir dosya aktarımını sohbet akışına yerleştirir.
+///
+/// Aktarımlar sohbetin altındaki ayrı bir şeritte gösteriliyordu; dosya
+/// bittiğinde oradan kayboluyor ve konuşmada hiçbir izi kalmıyordu. Artık
+/// her aktarımın sohbette bir baloncuğu var.
+///
+/// Bu kayıt ağ üzerinden GİTMEZ: iki taraf da aktarımı zaten `FileOffer`
+/// üzerinden biliyor, ayrıca bir sohbet çerçevesi göndermek protokole
+/// gereksiz bir tekrar eklerdi. `msg_id` bu yüzden aktarımdan türetiliyor —
+/// aynı aktarım için ikinci bir baloncuk oluşmaz.
+///
+/// Durum kopyalanmıyor: baloncuğun ilerlemesi ve sonucu okunurken
+/// `transfers` tablosundan iliştirilir (bkz. `messages::list`).
+pub fn record_transfer(
+    db: &DbPool,
+    app: &AppHandle,
+    device_id: &[u8; 32],
+    outgoing: bool,
+    transfer_id: &str,
+    file_name: &str,
+) -> AppResult<()> {
+    let msg_id = format!("transfer-{transfer_id}");
+    let sent_at = crate::db::devices::now();
+
+    let conn = db.get().map_err(pool_error)?;
+    let Some(id) = messages::insert(
+        &conn,
+        NewMessage {
+            msg_id: &msg_id,
+            device_id,
+            outgoing,
+            content_type: CONTENT_TYPE_FILE,
+            content: file_name,
+            transfer_id: Some(transfer_id),
+            sent_at,
+            // Dosyanın teslim durumu aktarımın kendi durumudur; baloncuğun
+            // tik göstergesi bu yüzden `sent`te sabit kalır.
+            status: MessageStatus::Sent,
+        },
+    )?
+    else {
+        return Ok(());
+    };
+
+    let transfer = crate::db::transfers::get(&conn, transfer_id)?;
+    let _ = app.emit(
+        EVENT_MESSAGE,
+        IncomingEvent {
+            device_id: encode_device_id(device_id),
+            message: Message {
+                id,
+                msg_id,
+                direction: if outgoing { "out" } else { "in" }.to_string(),
+                content_type: CONTENT_TYPE_FILE.to_string(),
+                content: file_name.to_string(),
+                transfer_id: Some(transfer_id.to_string()),
+                transfer,
+                sent_at,
+                status: MessageStatus::Sent.as_str().to_string(),
+            },
+        },
+    );
+    Ok(())
+}
+
+/// Şemadaki `content_type` değeri (001_initial.sql).
+const CONTENT_TYPE_FILE: &str = "file_ref";
 
 /// Gelen mesajı kaydeder, arayüze bildirir ve gönderilecek `ChatAck`i döndürür.
 ///
@@ -103,7 +176,7 @@ pub fn handle_incoming(
     let received_at = crate::db::devices::now();
 
     let conn = db.get().map_err(pool_error)?;
-    let is_new = messages::insert(
+    let inserted = messages::insert(
         &conn,
         NewMessage {
             msg_id: &incoming.msg_id,
@@ -111,12 +184,13 @@ pub fn handle_incoming(
             outgoing: false,
             content_type: incoming.content_type.as_str(),
             content: &incoming.body,
+            transfer_id: None,
             sent_at: received_at,
             status: MessageStatus::Delivered,
         },
     )?;
 
-    if is_new {
+    if let Some(id) = inserted {
         crate::notifications::message_received(
             app,
             &encode_device_id(device_id),
@@ -128,10 +202,13 @@ pub fn handle_incoming(
             IncomingEvent {
                 device_id: encode_device_id(device_id),
                 message: Message {
+                    id,
                     msg_id: incoming.msg_id.clone(),
                     direction: "in".to_string(),
                     content_type: incoming.content_type.as_str().to_string(),
                     content: incoming.body,
+                    transfer_id: None,
+                    transfer: None,
                     sent_at: received_at,
                     status: MessageStatus::Delivered.as_str().to_string(),
                 },

@@ -136,6 +136,14 @@ pub async fn prepare_offer(
             },
         )?;
     }
+
+    // Aktarım sohbet akışına da yazılır: dosya bittikten sonra konuşmada iz
+    // bırakmayan bir aktarım, kullanıcı için hiç olmamış gibidir.
+    if let Err(err) =
+        crate::chat::record_transfer(&ctx.db, &ctx.app, device_id, true, &transfer_id, &file_name)
+    {
+        tracing::warn!(error = %err, "aktarım sohbete yazılamadı");
+    }
     ctx.emit_changed();
 
     Ok((
@@ -360,6 +368,25 @@ pub async fn handle_offer(
     .is_err()
     {
         return reject(RejectReason::Internal);
+    }
+    drop(conn);
+
+    // Kaydedilen ad gösterilir, teklif edilen ad değil: sanitizasyon adı
+    // değiştirmiş olabilir ve kullanıcı diskte duran şeyi görmeli (§2.13.1).
+    let saved_name = target
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(&offer.name)
+        .to_string();
+    if let Err(err) = crate::chat::record_transfer(
+        &ctx.db,
+        &ctx.app,
+        device_id,
+        false,
+        &offer.transfer_id,
+        &saved_name,
+    ) {
+        tracing::warn!(error = %err, "aktarım sohbete yazılamadı");
     }
 
     ctx.emit_changed();

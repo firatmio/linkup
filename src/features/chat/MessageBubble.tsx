@@ -2,6 +2,8 @@ import { Check, CheckCheck, Clock, AlertCircle } from "lucide-react";
 import { t, type TranslationKey } from "../../i18n";
 import { cn } from "../../lib/cn";
 import { CodeBlock } from "./CodeBlock";
+import { FileBubble } from "./FileBubble";
+import { useTransferStore } from "../../stores/transferStore";
 import type { ChatMessage } from "../../lib/tauri";
 
 /** Mesaj durumu göstergesi — yalnızca giden mesajlarda (PLAN.md §2.8). */
@@ -61,7 +63,13 @@ export function MessageBubble({
 }) {
   const outgoing = message.direction === "out";
   const isCode = message.contentType === "code";
+  const isFile = message.contentType === "file_ref";
   const failed = message.status === "failed";
+
+  // Anlık ilerleme veritabanına yazılmaz; baloncuk onu bellekten okur.
+  const progress = useTransferStore((s) =>
+    message.transferId ? s.progress[message.transferId] : undefined,
+  );
 
   return (
     <div
@@ -71,7 +79,13 @@ export function MessageBubble({
         lastOfGroup ? "mb-2.5" : "mb-0.5",
       )}
     >
-      <div className={cn("flex max-w-[min(38rem,78%)] flex-col", isCode && "w-full max-w-[min(48rem,92%)]")}>
+      <div
+        className={cn(
+          "flex max-w-[min(38rem,78%)] flex-col",
+          isCode && "w-full max-w-[min(48rem,92%)]",
+          isFile && "w-[min(22rem,78%)]",
+        )}
+      >
         <div
           className={cn(
             "px-3 py-2 text-[length:var(--lu-text-body)]",
@@ -88,7 +102,14 @@ export function MessageBubble({
               : "border border-stroke bg-layer-alt text-fg",
           )}
         >
-          {isCode ? (
+          {isFile ? (
+            <FileBubble
+              transfer={message.transfer}
+              fileName={message.content}
+              progress={progress}
+              outgoing={outgoing}
+            />
+          ) : isCode ? (
             <CodeBlock content={message.content} />
           ) : (
             <p className="lu-selectable break-words whitespace-pre-wrap">{message.content}</p>
@@ -103,7 +124,7 @@ export function MessageBubble({
             )}
           >
             <span>{formatTime(message.sentAt)}</span>
-            {outgoing ? (
+            {outgoing && !isFile ? (
               <>
                 <StatusIcon status={message.status} onAccent={false} />
                 {failed ? <span className="text-danger">{t("message.status.failed")}</span> : null}

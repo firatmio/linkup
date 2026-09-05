@@ -45,12 +45,21 @@ impl MessageStatus {
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Message {
+    /// Satır kimliği. Yalnızca geçmişe kaydırmanın imleci olarak kullanılır;
+    /// `msg_id`'nin aksine yereldir ve iki uçta aynı değildir.
+    pub id: i64,
     pub msg_id: String,
     /// "in" | "out"
     pub direction: String,
     /// "text" | "code" | "image" | "file_ref"
     pub content_type: String,
     pub content: String,
+    /// `file_ref` mesajlarında ilgili aktarımın kimliği.
+    pub transfer_id: Option<String>,
+    /// Aktarımın o anki hâli. Mesaj kaydı aktarımın durumunu KOPYALAMAZ:
+    /// tek doğru kaynak `transfers` tablosudur, buraya okuma sırasında
+    /// iliştirilir.
+    pub transfer: Option<crate::db::transfers::Transfer>,
     pub sent_at: i64,
     pub status: String,
 }
@@ -61,17 +70,20 @@ pub struct NewMessage<'a> {
     pub outgoing: bool,
     pub content_type: &'a str,
     pub content: &'a str,
+    /// `file_ref` mesajlarında ilgili aktarım.
+    pub transfer_id: Option<&'a str>,
     pub sent_at: i64,
     pub status: MessageStatus,
 }
 
-/// Mesajı kaydeder. Aynı `msg_id` ikinci kez gelirse yok sayılır —
-/// yeniden bağlanma sonrası tekrar gönderim mesajı ikilememelidir.
-pub fn insert(conn: &Connection, message: NewMessage<'_>) -> AppResult<bool> {
+/// Mesajı kaydeder ve satır kimliğini döndürür. Aynı `msg_id` ikinci kez
+/// gelirse yok sayılır ve `None` döner — yeniden bağlanma sonrası tekrar
+/// gönderim mesajı ikilememelidir.
+pub fn insert(conn: &Connection, message: NewMessage<'_>) -> AppResult<Option<i64>> {
     let affected = conn.execute(
         "INSERT INTO messages (msg_id, conversation_id, device_id, direction,
-                               content_type, content, sent_at, status)
-         VALUES (?1, ?2, ?2, ?3, ?4, ?5, ?6, ?7)
+                               content_type, content, transfer_id, sent_at, status)
+         VALUES (?1, ?2, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
          ON CONFLICT(msg_id) DO NOTHING",
         rusqlite::params![
             message.msg_id,
@@ -79,11 +91,12 @@ pub fn insert(conn: &Connection, message: NewMessage<'_>) -> AppResult<bool> {
             if message.outgoing { "out" } else { "in" },
             message.content_type,
             message.content,
+            message.transfer_id,
             message.sent_at,
             message.status.as_str(),
         ],
     )?;
-    Ok(affected > 0)
+    Ok((affected > 0).then(|| conn.last_insert_rowid()))
 }
 
 /// Bir cihazla olan sohbeti eskiden yeniye döndürür.
@@ -98,7 +111,7 @@ pub fn list(
     // Sondan `limit` kadar alınıp ters çevrilir: kullanıcı sohbetin sonunu
     // görmek ister, başını değil.
     let mut stmt = conn.prepare(
-        "SELECT msg_id, direction, content_type, content, sent_at, status
+        "SELECT id, msg_id, direction, content_type, content, transfer_id, sent_at, status
          FROM messages
          WHERE conversation_id = ?1 AND (?2 IS NULL OR id < ?2)
          ORDER BY id DESC
@@ -109,19 +122,46 @@ pub fn list(
         rusqlite::params![device_id.as_slice(), before_id, limit],
         |row| {
             Ok(Message {
-                msg_id: row.get(0)?,
-                direction: row.get(1)?,
-                content_type: row.get(2)?,
-                content: row.get(3)?,
-                sent_at: row.get(4)?,
-                status: row.get(5)?,
+                id: row.get(0)?,
+                msg_id: row.get(1)?,
+                direction: row.get(2)?,
+                content_type: row.get(3)?,
+                content: row.get(4)?,
+                transfer_id: row.get(5)?,
+                transfer: None,
+                sent_at: row.get(6)?,
+                status: row.get(7)?,
             })
         },
     )?;
 
     let mut messages = rows.collect::<Result<Vec<_>, _>>()?;
     messages.reverse();
+    attach_transfers(conn, &mut messages)?;
     Ok(messages)
+}
+
+/// `file_ref` mesajlarına ilgili aktarım kayıtlarını iliştirir.
+///
+/// Tek sorguda toplanır: sohbette elli dosya varsa elli sorgu atmak, listeyi
+/// açmanın maliyetini görünür hâle getirirdi.
+fn attach_transfers(conn: &Connection, messages: &mut [Message]) -> AppResult<()> {
+    let ids: Vec<&str> = messages
+        .iter()
+        .filter_map(|m| m.transfer_id.as_deref())
+        .collect();
+    if ids.is_empty() {
+        return Ok(());
+    }
+
+    let transfers = crate::db::transfers::get_many(conn, &ids)?;
+    for message in messages.iter_mut() {
+        let Some(id) = message.transfer_id.as_deref() else {
+            continue;
+        };
+        message.transfer = transfers.iter().find(|t| t.transfer_id == id).cloned();
+    }
+    Ok(())
 }
 
 /// Giden bir mesajın durumunu ilerletir.
@@ -268,6 +308,7 @@ mod tests {
                 outgoing,
                 content_type: "text",
                 content: id,
+                transfer_id: None,
                 sent_at: 0,
                 status,
             },
@@ -304,14 +345,16 @@ mod tests {
                 outgoing: false,
                 content_type: "text",
                 content: "merhaba",
+                transfer_id: None,
                 sent_at: 0,
                 status: MessageStatus::Delivered,
             }
         )
-        .unwrap());
+        .unwrap()
+        .is_some());
 
         assert!(
-            !insert(
+            insert(
                 &conn,
                 NewMessage {
                     msg_id: "m1",
@@ -319,11 +362,13 @@ mod tests {
                     outgoing: false,
                     content_type: "text",
                     content: "merhaba",
+                    transfer_id: None,
                     sent_at: 0,
                     status: MessageStatus::Delivered,
                 }
             )
-            .unwrap(),
+            .unwrap()
+            .is_none(),
             "ikinci kayıt yok sayılmalı"
         );
         assert_eq!(list(&conn, &DEVICE, 50, None).unwrap().len(), 1);
@@ -479,15 +524,69 @@ mod tests {
             "son mesajlar getirilmeli"
         );
 
-        let first_id: i64 = conn
-            .query_row("SELECT id FROM messages WHERE msg_id = 'm7'", [], |r| {
-                r.get(0)
-            })
-            .unwrap();
-        let older = list(&conn, &DEVICE, 3, Some(first_id)).unwrap();
+        // İmleç istemcinin elindeki kayıttan gelir; ayrı bir sorgu gerekmez.
+        let older = list(&conn, &DEVICE, 3, Some(recent[0].id)).unwrap();
         assert_eq!(
             older.iter().map(|m| m.msg_id.as_str()).collect::<Vec<_>>(),
             ["m4", "m5", "m6"]
+        );
+    }
+
+    /// Dosya baloncuğu aktarımın durumunu KOPYALAMAZ; okuma sırasında
+    /// `transfers` tablosundan iliştirilir. Kopyalansaydı ilerleyen bir
+    /// aktarımın baloncuğu ilk hâlinde donardı.
+    #[test]
+    fn dosya_mesajina_aktarim_iliştirilir() {
+        use crate::db::transfers::{self, NewTransfer, TransferStatus};
+
+        let pool = setup();
+        let conn = pool.get().unwrap();
+
+        transfers::insert(
+            &conn,
+            NewTransfer {
+                transfer_id: "t1",
+                device_id: &DEVICE,
+                incoming: true,
+                file_name: "rapor.pdf",
+                file_size: 100,
+                mime: None,
+                expected_hash: &[0; 32],
+                part_path: None,
+                save_path: None,
+            },
+        )
+        .unwrap();
+
+        insert(
+            &conn,
+            NewMessage {
+                msg_id: "transfer-t1",
+                device_id: &DEVICE,
+                outgoing: false,
+                content_type: "file_ref",
+                content: "rapor.pdf",
+                transfer_id: Some("t1"),
+                sent_at: 0,
+                status: MessageStatus::Sent,
+            },
+        )
+        .unwrap();
+        send(&conn, "m2", true, MessageStatus::Sent);
+
+        transfers::set_status(&conn, "t1", TransferStatus::Done, None).unwrap();
+
+        let messages = list(&conn, &DEVICE, 50, None).unwrap();
+        let file = &messages[0];
+        assert_eq!(file.content_type, "file_ref");
+        assert_eq!(
+            file.transfer.as_ref().map(|t| t.status.as_str()),
+            Some("done"),
+            "baloncuk aktarımın GÜNCEL durumunu göstermeli"
+        );
+        assert!(
+            messages[1].transfer.is_none(),
+            "metin mesajına aktarım iliştirilmemeli"
         );
     }
 
@@ -504,6 +603,7 @@ mod tests {
                 outgoing: false,
                 content_type: "text",
                 content: "yarın toplantı var",
+                transfer_id: None,
                 sent_at: 0,
                 status: MessageStatus::Delivered,
             },

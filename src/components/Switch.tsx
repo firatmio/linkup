@@ -27,7 +27,7 @@ export function Switch({
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(
-        "relative inline-flex h-5 w-10 shrink-0 items-center rounded-lu-full border transition-colors",
+        "relative inline-flex h-5 w-10 shrink-0 items-center rounded-full border transition-colors",
         "duration-[var(--lu-dur-fast)] ease-[var(--lu-ease)]",
         "disabled:pointer-events-none disabled:opacity-50",
         checked
