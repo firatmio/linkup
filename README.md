@@ -67,12 +67,22 @@ başlatın.
 ## Doğrulama
 
 ```bash
-bun run typecheck
+bun run check
 ```
 
+Tip kontrolü → frontend build → `cargo fmt --check` → `cargo clippy -D warnings` → `cargo test`.
+
+Bu, `.githooks/pre-push` hook'u ile **her push'tan önce otomatik çalışır**. Depoyu
+ilk kez klonladıysanız hook'u etkinleştirin:
+
 ```bash
-cd src-tauri && cargo fmt --all --check && cargo clippy --all-targets -- -D warnings && cargo test
+git config core.hooksPath .githooks
 ```
+
+Atlamak gerekirse: `git push --no-verify`
+
+Uzak bir CI servisi bilinçli olarak kullanılmıyor — gerekçe ve bu kararın hangi
+koşullarda gözden geçirileceği: [PLAN.md §10-K9](PLAN.md).
 
 ## Görsel dil
 

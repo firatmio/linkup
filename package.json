@@ -8,6 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "check": "node scripts/check.mjs",
     "tauri": "tauri",
     "app": "tauri dev",
     "dev:a": "tauri dev -- -- --profile a",

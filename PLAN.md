@@ -570,8 +570,7 @@ P2P bir uygulamayı iki fiziksel makineyle geliştirmek imkânsıza yakındır. 
   - Rust birim testleri: protokol serialization round-trip · dosya adı sanitizasyonu (§2.13.1, saldırgan girdileriyle) · SAS hesaplama · resume offset mantığı
   - Entegrasyon testi: iki `Endpoint`'i aynı süreçte kurup uçtan uca pairing + mesaj + dosya transferi (gerçek ağ gerekmez, loopback)
   - Frontend: kritik store mantığı için Vitest
-- **CI (GitHub Actions):** `cargo fmt --check` · `cargo clippy -D warnings` · `cargo test` · `tsc --noEmit` · `npm run build`
-- **Git:** proje henüz repo değil — Faz 0'ın ilk adımı `git init` + ilk commit.
+- **Doğrulama:** `bun run check` — tip kontrolü · frontend build · `cargo fmt --check` · `cargo clippy -D warnings` · `cargo test`. `.githooks/pre-push` bunu her push'tan önce otomatik çalıştırır; projenin CI'ı budur (§10-K9).
 
 ---
 
@@ -649,3 +648,7 @@ Windows Firewall "Public network" profili ve kurumsal/misafir ağlardaki client 
 
 **K8 — UI dili Türkçe, ama i18n altyapısı baştan.**
 Metinler sözlük dosyasında toplanır; v1'de tek dil yüklenir. Sonradan i18n eklemek tüm UI dosyalarına dokunmayı gerektirirdi.
+
+**K9 — Uzak CI servisi yok; doğrulama pre-push hook'u ile yerelde.**
+Uzak koşucunun (GitHub Actions vb.) üç değeri var: commit öncesi unutulanı yakalamak, temiz oda/tekrarlanabilirlik, çapraz platform doğrulama. Tek geliştirici, tek makine ve Windows-öncelikli bir uygulamada ikincisi ve üçüncüsü henüz spekülatif; birincisi ise `.githooks/pre-push` ile bedava çözülüyor. Docker'lı bir yerel CI da değerlendirildi ve elendi: Linux'u doğrular ama asıl riskin bulunduğu Windows'a özgü kodu (keyring backend'i, rezerve dosya adları, MAX_PATH — §2.6, §2.13.1) test edemez.
+**Bu karar şu koşullarda gözden geçirilmeli:** projeye ikinci bir geliştirici katıldığında, ya da macOS/Linux gerçekten hedef sürüm hâline geldiğinde (§2.15).

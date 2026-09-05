@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+# Push öncesi doğrulama — CI yerine geçer (PLAN.md §6).
+# Atlamak için: git push --no-verify
+exec node scripts/check.mjs
