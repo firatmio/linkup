@@ -23,6 +23,7 @@ pub struct AppInfo {
 #[tauri::command]
 pub fn app_info(state: State<'_, AppState>) -> AppInfo {
     let p = &state.paths;
+    tracing::debug!(profile = p.profile_label(), "app_info istendi");
     AppInfo {
         version: env!("CARGO_PKG_VERSION").to_string(),
         profile: p.profile.clone(),

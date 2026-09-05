@@ -5,8 +5,9 @@ import process from "node:process";
 
 const host = process.env.TAURI_DEV_HOST;
 
-// Profil başına ayrı Vite portu (PLAN.md §6): dev:a → 1420, dev:b → 1422.
-const port = Number(process.env.VITE_DEV_PORT ?? 1420);
+// Tüm instance'lar tek Vite sunucusundan beslenir (PLAN.md §6): profil ayrımı
+// Rust tarafında --profile ile yapılır, frontend aynıdır.
+const port = 1420;
 
 export default defineConfig(() => ({
   plugins: [react(), tailwindcss()],

@@ -17,6 +17,14 @@ export function SettingsPage() {
   const themePreference = useUiStore((s) => s.themePreference);
   const setThemePreference = useUiStore((s) => s.setThemePreference);
   const info = useAppStore((s) => s.info);
+  const loading = useAppStore((s) => s.loading);
+  const error = useAppStore((s) => s.error);
+
+  /** Yüklenirken "Yükleniyor…", hata varsa hata metni, aksi halde değer. */
+  const value = (get: (i: NonNullable<typeof info>) => string): string => {
+    if (info) return get(info);
+    return loading ? t("common.loading") : (error ?? t("error.unknown"));
+  };
 
   return (
     <>
@@ -47,27 +55,27 @@ export function SettingsPage() {
             <SettingRow
               icon={<Info size={18} />}
               title={t("settings.version")}
-              description={info?.version ?? t("common.loading")}
+              description={value((i) => i.version)}
             />
             <SettingRow
               icon={<FlaskConical size={18} />}
               title={t("settings.profile")}
-              description={info ? (info.profile ?? t("settings.profile.none")) : t("common.loading")}
+              description={value((i) => i.profile ?? t("settings.profile.none"))}
             />
             <SettingRow
               icon={<Network size={18} />}
               title={t("settings.quicPort")}
-              description={info ? String(info.quicPort) : t("common.loading")}
+              description={value((i) => String(i.quicPort))}
             />
             <SettingRow
               icon={<HardDrive size={18} />}
               title={t("settings.dataDir")}
-              description={info?.dataDir ?? t("common.loading")}
+              description={value((i) => i.dataDir)}
             />
             <SettingRow
               icon={<FolderOpen size={18} />}
               title={t("settings.downloadsDir")}
-              description={info?.downloadsDir ?? t("common.loading")}
+              description={value((i) => i.downloadsDir)}
             />
             <SettingRow
               icon={<FolderOpen size={18} />}

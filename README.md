@@ -34,11 +34,13 @@ LinkUp bir P2P uygulaması; test etmek için iki cihaz gerekir. `--profile` bayr
 bunu tek makinede mümkün kılar — her profil kendi veri dizinini, veritabanını,
 kimlik anahtarını ve QUIC portunu kullanır.
 
-İki ayrı terminalde:
+Birinci terminal (derler, Vite sunucusunu ve birinci pencereyi açar):
 
 ```bash
 bun run dev:a
 ```
+
+Derleme bitip pencere açıldıktan sonra ikinci terminalde:
 
 ```bash
 bun run dev:b
@@ -47,12 +49,18 @@ bun run dev:b
 | | `dev:a` | `dev:b` |
 |---|---|---|
 | Veri dizini | `%APPDATA%/LinkUp-a` | `%APPDATA%/LinkUp-b` |
-| Vite portu | 1420 | 1422 |
 | QUIC portu | 47811 | 47812 |
 | Pencere başlığı | LinkUp (A) | LinkUp (B) |
 
-> İkisi aynı `target/` dizinini paylaşır; ilk derleme biterken ikincisi cargo
-> kilidinde bekler. Sonraki başlatmalar hızlıdır.
+Üçüncü bir instance gerekirse: `bun run dev:c`
+
+**Nasıl çalışıyor:** `tauri dev`i iki kez çalıştırmak Windows'ta başarısız olur —
+ikinci cargo derlemesi, birincinin çalıştırdığı `linkup.exe`yi silemez. Bu yüzden
+`dev:a` tek derlemeyi ve tek Vite sunucusunu yönetir; `dev:b` derlenmiş
+binary'nin profile özel bir kopyasını çalıştırır. İki pencere de aynı Vite
+sunucusundan beslendiği için **frontend değişiklikleri ikisinde de anında yansır**.
+Rust tarafı değiştiğinde `dev:a` kendini yeniler; ikinci instance'ı elle yeniden
+başlatın.
 
 Üretim binary'sinde de aynı bayrak geçerlidir: `linkup.exe --profile a`
 
