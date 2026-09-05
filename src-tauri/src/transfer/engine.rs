@@ -19,6 +19,9 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
+use super::approval::{
+    ApprovalManager, ApprovalRequest, DECISION_TIMEOUT, EVENT_REQUESTED, EVENT_RESOLVED,
+};
 use super::limiter::RateLimiter;
 use super::paths;
 use crate::db::transfers::{self, NewTransfer, TransferStatus};
@@ -56,6 +59,8 @@ pub struct TransferContext {
     pub app: AppHandle,
     /// Ayarlarda indirme klasörü boşsa kullanılan varsayılan.
     pub default_download_dir: PathBuf,
+    /// Kullanıcı onayı bekleyen teklifler.
+    pub approvals: Arc<ApprovalManager>,
 }
 
 impl TransferContext {
@@ -240,9 +245,10 @@ async fn send_file_inner(
 /// Dosya adı burada güvenli hâle getirilir (PLAN.md §2.13.1) ve disk alanı
 /// burada kontrol edilir (§2.13.2); bunlar reddedilebilir sebeplerdir,
 /// transferin ortasında patlamamalıdır.
-pub fn handle_offer(
+pub async fn handle_offer(
     ctx: &TransferContext,
     device_id: &[u8; 32],
+    device_name: &str,
     offer: &FileOffer,
 ) -> ControlMessage {
     let reject = |reason: RejectReason| ControlMessage::FileReject {
@@ -257,14 +263,17 @@ pub fn handle_offer(
 
     // Kabul politikası (PLAN.md §2.13.3). Eşleşmemiş cihazdan buraya zaten
     // gelinemez: eşleşmemiş bağlantılar yalnızca eşleştirme mesajı gönderebilir.
-    let accepted = match settings.accept_policy.as_str() {
-        "always" => false,
-        "threshold" => offer.size <= settings.accept_size_threshold,
-        // "trusted": güvenilir cihazdan gelen her dosya kabul edilir.
+    let needs_approval = match settings.accept_policy.as_str() {
+        // Güvenilir cihazdan gelen her dosya sorulmadan alınır.
+        "trusted" => false,
+        // Yalnızca eşiğin üstündekiler sorulur.
+        "threshold" => offer.size > settings.accept_size_threshold,
+        // Varsayılan: her dosya için sor.
         _ => true,
     };
-    if !accepted {
-        return reject(RejectReason::TooLarge);
+
+    if needs_approval && !ask_user(ctx, device_id, device_name, offer).await {
+        return reject(RejectReason::Declined);
     }
 
     let download_dir = ctx.download_dir();
@@ -350,12 +359,31 @@ pub fn handle_offer(
 
 /// Gelen bir transfer akışını okur, `.part` dosyasına yazar, bütünlüğü
 /// doğrular ve nihai adına taşır.
-pub async fn receive_stream(ctx: TransferContext, connection: Connection, mut stream: RecvStream) {
-    let header = match read_frame(&mut stream).await {
+pub async fn receive_stream(
+    ctx: TransferContext,
+    connection: Connection,
+    peer_name: String,
+    mut stream: RecvStream,
+) {
+    // Tek yönlü akışlar yalnızca dosya verisi taşımaz: alıcının bütünlük
+    // sonucu ve iptal bildirimi de buradan gelir. Kontrol akışının sahibi
+    // bağlantı döngüsü olduğu için bu bildirimler oraya yazılamıyor.
+    let (transfer_id, offset) = match read_frame(&mut stream).await {
         Ok(ControlMessage::TransferStreamHeader {
             transfer_id,
             offset,
         }) => (transfer_id, offset),
+
+        Ok(ControlMessage::FileComplete { transfer_id, ok }) => {
+            mark_sender_complete(&ctx, &transfer_id, ok);
+            return;
+        }
+
+        Ok(ControlMessage::TransferCancel { transfer_id }) => {
+            mark_cancelled(&ctx, &transfer_id);
+            return;
+        }
+
         Ok(other) => {
             tracing::warn!(?other, "transfer akışının başında beklenmeyen çerçeve");
             return;
@@ -366,10 +394,15 @@ pub async fn receive_stream(ctx: TransferContext, connection: Connection, mut st
         }
     };
 
-    let (transfer_id, offset) = header;
     match receive_stream_inner(&ctx, &mut stream, &transfer_id, offset).await {
         Ok(saved) => {
             tracing::info!(transfer_id, path = %saved.display(), "dosya alındı");
+            let name = saved
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("dosya")
+                .to_string();
+            crate::notifications::file_received(&ctx.app, &peer_name, &name);
             send_completion(&connection, &transfer_id, true).await;
         }
         Err(err) => {
@@ -501,6 +534,46 @@ async fn send_completion(connection: &Connection, transfer_id: &str, ok: bool) {
     )
     .await;
     let _ = stream.finish();
+}
+
+/// Kullanıcıya sorar ve kararını bekler.
+///
+/// Süre dolarsa reddedilir: karşı tarafı süresiz bekletmek, hem bağlantıyı
+/// hem göndericinin dosyasını rehin tutmak olurdu.
+async fn ask_user(
+    ctx: &TransferContext,
+    device_id: &[u8; 32],
+    device_name: &str,
+    offer: &FileOffer,
+) -> bool {
+    let decision = ctx.approvals.register(&offer.transfer_id);
+    let safe_name = paths::sanitize_file_name(&offer.name);
+    crate::notifications::file_offer(&ctx.app, device_name, &safe_name);
+
+    let _ = ctx.app.emit(
+        EVENT_REQUESTED,
+        ApprovalRequest {
+            transfer_id: offer.transfer_id.clone(),
+            device_id: data_encoding::BASE32_NOPAD.encode(device_id),
+            device_name: device_name.to_string(),
+            // Kullanıcıya gösterilen ad da temizlenmiş olmalı: ham ad
+            // yanıltıcı olabilir (yazım yönü karakterleri, uzun yol).
+            file_name: safe_name,
+            file_size: offer.size,
+        },
+    );
+
+    let accepted = match tokio::time::timeout(DECISION_TIMEOUT, decision).await {
+        Ok(Ok(accepted)) => accepted,
+        // Kanal düştü veya süre doldu.
+        _ => {
+            ctx.approvals.cancel(&offer.transfer_id);
+            false
+        }
+    };
+
+    let _ = ctx.app.emit(EVENT_RESOLVED, &offer.transfer_id);
+    accepted
 }
 
 // ------------------------------------------------------------- yardımcılar

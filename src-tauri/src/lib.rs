@@ -7,6 +7,7 @@ mod error;
 mod identity;
 mod logging;
 mod network;
+mod notifications;
 mod pairing;
 mod paths;
 mod state;
@@ -50,6 +51,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .setup(move |app| {
             use tauri::Manager;
 
@@ -104,6 +106,7 @@ pub fn run() {
                 db: db.clone(),
                 app: app.handle().clone(),
                 default_download_dir: paths.downloads_dir.clone(),
+                approvals: std::sync::Arc::new(transfer::approval::ApprovalManager::default()),
             });
 
             let connections = network::manager::ConnectionManager::new(
@@ -150,6 +153,7 @@ pub fn run() {
             commands::send_message,
             commands::mark_conversation_read,
             commands::send_file,
+            commands::respond_to_transfer,
             commands::incoming_files,
             commands::active_transfers,
             commands::open_transfer_file,

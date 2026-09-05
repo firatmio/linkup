@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { AppSidebar } from "./AppSidebar";
 import { ConversationList } from "../features/chat/ConversationList";
 import { PairingDialog } from "../features/devices/PairingDialog";
+import { TransferRequestDialog } from "../features/transfer/TransferRequestDialog";
 
 /**
  * Uygulama iskeleti: solda sabit sütun, sağda içerik katmanı.
@@ -23,8 +24,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-tl-lu-lg border-t border-l border-stroke bg-layer">
         {children}
       </main>
-      {/* Eşleştirme isteği hangi ekranda olursak olalım öne çıkmalı. */}
+      {/* Eşleştirme ve dosya istekleri hangi ekranda olursak olalım öne çıkmalı. */}
       <PairingDialog />
+      <TransferRequestDialog />
     </div>
   );
 }

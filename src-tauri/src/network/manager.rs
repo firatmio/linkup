@@ -254,6 +254,16 @@ impl ConnectionManager {
         }
     }
 
+    /// Giden kuyruğun göndericisi. Uzun süren işlerin sonucunu bağlantı
+    /// döngüsünü bloklamadan yazabilmek için.
+    fn outbox_sender(&self, device_id: &[u8; 32]) -> Option<mpsc::Sender<ControlMessage>> {
+        self.outbox
+            .lock()
+            .expect("outbox kilidi")
+            .get(device_id)
+            .cloned()
+    }
+
     pub fn is_connected(&self, device_id: &[u8; 32]) -> bool {
         self.presence.is_online(device_id)
     }
@@ -340,7 +350,10 @@ impl ConnectionManager {
                     Ok(stream) => {
                         let ctx = (*self.transfers).clone();
                         let connection = connection.clone();
-                        tauri::async_runtime::spawn(engine::receive_stream(ctx, connection, stream));
+                        let peer = peer_name.to_string();
+                        tauri::async_runtime::spawn(engine::receive_stream(
+                            ctx, connection, peer, stream,
+                        ));
                         Ok(true)
                     }
                     Err(err) => {
@@ -408,7 +421,10 @@ impl ConnectionManager {
             }
 
             ControlMessage::Chat(incoming) => {
-                match crate::chat::handle_incoming(&self.db, &self.app, &device_id, incoming) {
+                let peer_name = parts.peer.device_name.clone();
+                match crate::chat::handle_incoming(
+                    &self.db, &self.app, &device_id, &peer_name, incoming,
+                ) {
                     Ok(ack) => write_frame(&mut parts.send, &ack).await?,
                     Err(err) => tracing::warn!(error = %err, "gelen mesaj kaydedilemedi"),
                 }
@@ -425,8 +441,19 @@ impl ConnectionManager {
             }
 
             ControlMessage::FileOffer(offer) => {
-                let response = engine::handle_offer(&self.transfers, &device_id, &offer);
-                write_frame(&mut parts.send, &response).await?;
+                // Onay kullanıcıdan gelebilir; burada beklemek bağlantı
+                // döngüsünü kilitler ve o sırada başka hiçbir mesaj işlenemez.
+                // Karar ayrı görevde beklenir, yanıt giden kuyruğa yazılır.
+                let ctx = (*self.transfers).clone();
+                let outbox = self.outbox_sender(&device_id);
+                let peer_name = parts.peer.device_name.clone();
+
+                tauri::async_runtime::spawn(async move {
+                    let response = engine::handle_offer(&ctx, &device_id, &peer_name, &offer).await;
+                    if let Some(outbox) = outbox {
+                        let _ = outbox.send(response).await;
+                    }
+                });
             }
 
             ControlMessage::FileAccept {
@@ -492,6 +519,20 @@ impl ConnectionManager {
     /// kullanıcı bunu dönen saat ikonuna bakarak tahmin etmek zorunda kalmamalı.
     fn fail_pending(&self, device_id: &[u8; 32]) {
         let Ok(conn) = self.db.get() else { return };
+
+        // Yarım kalan transferler ölmedi: `.part` dosyası duruyor, yeniden
+        // bağlanınca kaldığı yerden devam edebilir. "Duraklatıldı" göstermek,
+        // ilerlemeyen bir çubuk göstermekten dürüst.
+        if let Ok(paused) = crate::db::transfers::pause_for_device(&conn, device_id) {
+            if !paused.is_empty() {
+                tracing::info!(
+                    count = paused.len(),
+                    "bağlantı koptu, transferler duraklatıldı"
+                );
+                let _ = self.app.emit(crate::transfer::engine::EVENT_CHANGED, ());
+            }
+        }
+
         let Ok(failed) = crate::db::messages::fail_pending_for_device(&conn, device_id) else {
             return;
         };

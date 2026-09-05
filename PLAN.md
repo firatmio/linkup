@@ -386,9 +386,13 @@ Karşı taraf keyfi bir `file_name` gönderebilir. `FileOffer` işlenirken:
 
 | Mod | Davranış |
 |---|---|
-| **Güvenilir cihazlardan otomatik kabul** (varsayılan) | Eşleşmiş cihazlardan gelen dosyalar sorulmadan indirilir |
-| Boyut eşiğiyle otomatik | Eşiğin (varsayılan 100 MB) altı otomatik, üstü onay ister |
-| Her zaman sor | Her dosya için onay |
+| **Her zaman sor** (varsayılan) | Her dosya için kullanıcı onayı istenir |
+| Boyut eşiğiyle | Eşiğin (varsayılan 100 MB) altı otomatik, üstü onay ister |
+| Güvenilir cihazlardan otomatik kabul | Eşleşmiş cihazlardan gelen dosyalar sorulmadan indirilir |
+
+> **Varsayılan neden "sor":** eşleşme bir güven kararıdır ama sınırsız yazma yetkisi değil. Kullanıcı ne aldığını bilmeli. Onay 60 saniye içinde gelmezse teklif reddedilir — karşı tarafı süresiz bekletmek hem bağlantıyı hem göndericinin dosyasını rehin tutmak olurdu.
+>
+> Bekleme, bağlantı döngüsünde YAPILMAZ: döngü o sırada başka hiçbir mesajı işleyemezdi. Karar ayrı bir görevde beklenir, yanıt giden kuyruğa yazılır.
 
 Eşleşmemiş cihazlardan dosya **hiçbir modda** kabul edilmez.
 
@@ -612,7 +616,7 @@ Her fazın sonunda **çalışan ve elle doğrulanabilir** bir çıktı vardır.
 | **6 — Dashboard** | Cihaz özet kartları gerçek verilerle · online durumu · son mesaj + göreli zaman · okunmamış sayısı · karttan sohbete geçiş · boş durumlar | Açılış ekranı anlamlı veri gösteriyor |
 | **7 — Dosya transferi + resume** | `FileOffer`/`FileAccept` · stream akışı · **dosya adı sanitizasyonu** · disk alanı kontrolü · kabul politikası · progress UI · resume · kuyruk · hız limiti · çoklu dosya | Büyük dosya transfer ediliyor; ağ kesilip geri gelince kaldığı yerden devam ediyor; kötü niyetli dosya adları reddediliyor |
 | **7.5 — Sohbette medya** | Görsel önizleme · mesaj listesinin sanallaştırılması + geçmişe kaydırma | Gönderilen görsel sohbette küçük resim olarak görünüyor; uzun geçmiş akıcı kayıyor |
-| **8 — Gelen Dosyalar + Bildirim + Tray** | Dosya geçmişi + filtre/arama · dosya bilgi modalı · son medyalar şeridi · native bildirim (**önce tıklama event'i doğrulanır**) · tray · single-instance · autostart · global kısayol + hızlı gönder popup | Uygulama tray'de yaşıyor; bildirim geliyor ve tıklayınca doğru ekran açılıyor |
+| **8 — Gelen Dosyalar + Tray** | Dosya geçmişi + filtre/arama · dosya bilgi modalı · son medyalar şeridi · native bildirim (**önce tıklama event'i doğrulanır**) · tray · single-instance · autostart · global kısayol + hızlı gönder popup | Uygulama tray'de yaşıyor; bildirim geliyor ve tıklayınca doğru ekran açılıyor |
 | **9 — Arama + Pano** | FTS5 arama (sohbet içi + global) · Türkçe tokenizer doğrulaması · **pano dosya spike'ı** → `Ctrl+V` akışı | Arama çalışıyor; pano özelliği ya çalışıyor ya da kapsamı dürüstçe daraltıldı |
 | **10 — Klasör senkronizasyonu** | Klasör seçimi · manifest karşılaştırma · `notify` + debounce + periyodik tarama · çakışma yönetimi · ignore desenleri | İki cihaz arasında klasör senkron kalıyor; çakışma kaybolmadan yan yana kaydediliyor |
 | **11 — Cilalama + dağıtım** | Hata mesajlarının tamamlanması · boş/hata durumları · ayarlar sayfasının tamamı · performans testleri · installer + firewall kuralı · updater · imzalama/notarization | Kurulabilir sürüm çıkıyor, temiz bir makinede çalışıyor |
@@ -621,6 +625,7 @@ Her fazın sonunda **çalışan ve elle doğrulanabilir** bir çıktı vardır.
 **Bağımlılık notları:**
 - Faz 1, Faz 4'ün ön koşuludur (DB olmadan pairing kaydedilemez).
 - Faz 2'nin benchmark'ı Faz 7'yi kilitler — hedefe ulaşılamazsa Faz 7'ye geçmeden tuning yapılır.
+- Native bildirimler Faz 7'de öne alındı (kullanıcı isteği): mesaj ve dosya geldiğinde, pencere odakta DEĞİLSE gösteriliyor. Bildirime tıklama yönlendirmesi hâlâ Faz 8'de.
 - Faz 8 ve 9'daki spike'lar (bildirim tıklama, pano dosyası) o fazın **ilk işidir**; başarısız olurlarsa kapsam daraltılır, faz ertelenmez.
 
 ---

@@ -21,8 +21,9 @@ Ayrıntılı mimari, protokol tasarımı ve faz planı için: [PLAN.md](PLAN.md)
   syntax highlight'lı kod blokları
 - Faz 6: ana sayfada cihaz özet kartları — çevrimiçilik, son mesaj, göreli
   zaman, okunmamış sayısı; karta tıklayınca sohbet açılıyor
-- Faz 7: dosya transferi — sürükle-bırak, ilerleme/hız/kalan süre, blake3
-  bütünlük doğrulaması, kesintide devam, hız limiti, gelen dosyalar geçmişi
+- Faz 7: dosya transferi — sürükle-bırak, alıcı onayı, ilerleme/hız/kalan süre,
+  blake3 bütünlük doğrulaması, kesintide devam, hız limiti, gelen dosyalar
+  geçmişi; pencere odakta değilken native bildirimler
 
 Sohbette görsel önizleme ve mesaj listesinin sanallaştırılması sırada
 (bkz. PLAN.md Faz 7.5).

@@ -199,6 +199,42 @@ pub fn list_active(conn: &Connection) -> AppResult<Vec<Transfer>> {
     Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
+/// Bir cihazla olan yarım kalan transferleri duraklatır ve kimliklerini
+/// döndürür.
+///
+/// Bağlantı koptuğunda çağrılır: veri artık akmayacaktır, ama `.part` dosyası
+/// durduğu için transfer ölmedi — kullanıcı ilerlemeyen bir çubuğa bakmak
+/// yerine "duraklatıldı" görmeli.
+pub fn pause_for_device(conn: &Connection, device_id: &[u8; 32]) -> AppResult<Vec<String>> {
+    let mut stmt = conn.prepare(
+        "SELECT transfer_id FROM transfers
+         WHERE device_id = ?1 AND status IN (?2, ?3)",
+    )?;
+    let ids: Vec<String> = stmt
+        .query_map(
+            rusqlite::params![
+                device_id.as_slice(),
+                TransferStatus::Active.as_str(),
+                TransferStatus::Pending.as_str(),
+            ],
+            |row| row.get(0),
+        )?
+        .collect::<Result<_, _>>()?;
+
+    if !ids.is_empty() {
+        conn.execute(
+            "UPDATE transfers SET status = ?1 WHERE device_id = ?2 AND status IN (?3, ?4)",
+            rusqlite::params![
+                TransferStatus::Paused.as_str(),
+                device_id.as_slice(),
+                TransferStatus::Active.as_str(),
+                TransferStatus::Pending.as_str(),
+            ],
+        )?;
+    }
+    Ok(ids)
+}
+
 /// Uygulama kapanınca yarım kalan transferler `active` durumunda donar;
 /// açılışta duraklatılmış sayılırlar ki kullanıcı ilerlemeyen bir çubuğa
 /// bakmasın. `.part` dosyası durduğu için devam ettirilebilirler.
@@ -362,6 +398,35 @@ mod tests {
             get(&conn, "t2").unwrap().unwrap().status,
             "done",
             "tamamlanmış transfere dokunulmamalı"
+        );
+    }
+
+    /// Bağlantı koptuğunda o cihazın yarım transferleri duraklatılmalı;
+    /// başka cihazınkilere dokunulmamalı.
+    #[test]
+    fn kopan_baglantinin_transferleri_duraklatilir() {
+        let pool = setup();
+        let conn = pool.get().unwrap();
+        devices::upsert(&conn, &[2; 32], "Diğer", None).unwrap();
+
+        insert(&conn, new("t1", true)).unwrap();
+        update_progress(&conn, "t1", 50).unwrap();
+        insert(&conn, new("t2", true)).unwrap();
+        set_status(&conn, "t2", TransferStatus::Done, None).unwrap();
+
+        let mut other = new("t3", true);
+        other.device_id = &[2; 32];
+        insert(&conn, other).unwrap();
+        update_progress(&conn, "t3", 10).unwrap();
+
+        let paused = pause_for_device(&conn, &DEVICE).unwrap();
+        assert_eq!(paused, ["t1"]);
+        assert_eq!(get(&conn, "t1").unwrap().unwrap().status, "paused");
+        assert_eq!(get(&conn, "t2").unwrap().unwrap().status, "done");
+        assert_eq!(
+            get(&conn, "t3").unwrap().unwrap().status,
+            "active",
+            "başka cihazın transferine dokunulmamalı"
         );
     }
 

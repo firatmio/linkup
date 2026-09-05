@@ -17,8 +17,9 @@ const DEFAULTS: &[(&str, &str)] = &[
     ("deviceName", ""),  // boş = makine adı kullanılır
     // Dosya transferi (PLAN.md §2.7.4, §2.13.3)
     ("downloadDir", ""), // boş = İndirilenler/LinkUp
-    // trusted | threshold | always  (PLAN.md §2.13.3)
-    ("acceptPolicy", "trusted"),
+    // always (her dosyayı sor) | threshold (eşiğin üstünü sor) | trusted (sorma)
+    // PLAN.md §2.13.3 — varsayılan sormaktır: kullanıcı ne aldığını bilmeli.
+    ("acceptPolicy", "always"),
     ("acceptSizeThreshold", "104857600"), // 100 MB
     ("maxConcurrentTransfers", "3"),
     ("speedLimitBytes", "0"), // 0 = sınırsız

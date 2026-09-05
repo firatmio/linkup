@@ -287,6 +287,12 @@ pub async fn send_file(state: State<'_, AppState>, id: String, path: String) -> 
     Ok(transfer_id)
 }
 
+/// Kullanıcının dosya kabul kararını akışa iletir (PLAN.md §2.13.3).
+#[tauri::command]
+pub fn respond_to_transfer(state: State<'_, AppState>, transfer_id: String, accept: bool) -> bool {
+    state.transfers.approvals.respond(&transfer_id, accept)
+}
+
 /// Alınan dosyaların geçmişi (PLAN.md §3.2 "Gelen Dosyalar").
 #[tauri::command]
 pub fn incoming_files(state: State<'_, AppState>, limit: Option<u32>) -> AppResult<Vec<Transfer>> {

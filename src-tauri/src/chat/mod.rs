@@ -95,6 +95,7 @@ pub fn handle_incoming(
     db: &DbPool,
     app: &AppHandle,
     device_id: &[u8; 32],
+    device_name: &str,
     incoming: ChatMessage,
 ) -> AppResult<ControlMessage> {
     // Kayıt zamanı bizim saatimize göre: karşı tarafın saati yanlışsa
@@ -116,6 +117,7 @@ pub fn handle_incoming(
     )?;
 
     if is_new {
+        crate::notifications::message_received(app, device_name, &incoming.body);
         let _ = app.emit(
             EVENT_MESSAGE,
             IncomingEvent {

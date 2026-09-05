@@ -127,6 +127,15 @@ export interface Transfer {
   completedAt: number | null;
 }
 
+/** Gelen dosya onayı istendiğinde (PLAN.md §2.13.3). */
+export interface TransferRequest {
+  transferId: string;
+  deviceId: string;
+  deviceName: string;
+  fileName: string;
+  fileSize: number;
+}
+
 export interface TransferProgress {
   transferId: string;
   bytesDone: number;
@@ -145,7 +154,22 @@ export const events = {
   chatStatus: "chat:status",
   transferProgress: "transfer:progress",
   transferChanged: "transfer:changed",
+  transferRequested: "transfer:requested",
+  transferResolved: "transfer:resolved",
 } as const;
+
+export function onTransferRequested(
+  handler: (request: TransferRequest) => void,
+): Promise<UnlistenFn> {
+  return listen<TransferRequest>(events.transferRequested, (e) => handler(e.payload));
+}
+
+/** İstek başka bir yolla sonuçlandı (süre doldu veya iptal edildi). */
+export function onTransferResolved(
+  handler: (transferId: string) => void,
+): Promise<UnlistenFn> {
+  return listen<string>(events.transferResolved, (e) => handler(e.payload));
+}
 
 export function onTransferProgress(
   handler: (event: TransferProgress) => void,
@@ -222,6 +246,8 @@ export const api = {
   markConversationRead: (id: string) =>
     invoke<number>("mark_conversation_read", { id }),
   sendFile: (id: string, path: string) => invoke<string>("send_file", { id, path }),
+  respondToTransfer: (transferId: string, accept: boolean) =>
+    invoke<boolean>("respond_to_transfer", { transferId, accept }),
   incomingFiles: (limit?: number) => invoke<Transfer[]>("incoming_files", { limit }),
   activeTransfers: () => invoke<Transfer[]>("active_transfers"),
   openTransferFile: (transferId: string) =>
