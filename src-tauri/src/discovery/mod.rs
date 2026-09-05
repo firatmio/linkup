@@ -351,8 +351,9 @@ fn emit(app: &AppHandle, registry: &Arc<Mutex<Registry>>) {
         let registry = registry.lock().expect("kayıt defteri kilidi");
         registry.list().iter().map(Into::into).collect()
     };
-    if let Err(err) = app.emit(DISCOVERY_EVENT, &devices) {
-        tracing::warn!(error = %err, "keşif olayı yayınlanamadı");
+    match app.emit(DISCOVERY_EVENT, &devices) {
+        Ok(()) => tracing::debug!(count = devices.len(), "keşif olayı yayınlandı"),
+        Err(err) => tracing::warn!(error = %err, "keşif olayı yayınlanamadı"),
     }
 }
 

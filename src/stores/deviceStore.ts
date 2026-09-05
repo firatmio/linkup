@@ -13,6 +13,8 @@ interface DeviceState {
   adding: boolean;
   /** Elle ekleme hatası — dialog içinde gösterilir. */
   addError: string | null;
+  /** Liste çekilemedi — sidebar'da gösterilir. */
+  listError: string | null;
 
   load: () => Promise<void>;
   addManually: (address: string) => Promise<boolean>;
@@ -25,14 +27,15 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
   loading: true,
   adding: false,
   addError: null,
+  listError: null,
 
   load: async () => {
     try {
       set({ discovered: await api.discoveredDevices(), loading: false });
-    } catch {
-      // Keşif listesi boş kalabilir; bu, uygulamanın geri kalanını
-      // engellemeyecek kadar önemsiz bir hata.
-      set({ loading: false });
+    } catch (err) {
+      // Hatayı yutmak, "ağda cihaz aranıyor" gösterip sorunu gizlemek olurdu.
+      set({ loading: false, listError: translateError(err) });
+      console.error("keşif listesi alınamadı", err);
     }
   },
 

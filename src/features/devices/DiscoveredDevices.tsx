@@ -13,6 +13,7 @@ import { ManualAddDialog } from "./ManualAddDialog";
 export function DiscoveredDevices() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const devices = useDeviceStore((s) => s.discovered);
+  const listError = useDeviceStore((s) => s.listError);
   const forget = useDeviceStore((s) => s.forget);
 
   return (
@@ -28,8 +29,13 @@ export function DiscoveredDevices() {
       </div>
 
       {devices.length === 0 ? (
-        <p className="px-3 pb-2 text-[length:var(--lu-text-caption)] text-fg-tertiary">
-          {t("nav.discovered.empty")}
+        <p
+          className={cn(
+            "px-3 pb-2 text-[length:var(--lu-text-caption)]",
+            listError ? "text-danger" : "text-fg-tertiary",
+          )}
+        >
+          {listError ?? t("nav.discovered.empty")}
         </p>
       ) : (
         <ul className="mb-1 flex max-h-52 flex-col gap-0.5 overflow-y-auto">

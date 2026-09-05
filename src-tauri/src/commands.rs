@@ -83,7 +83,9 @@ pub fn set_setting(state: State<'_, AppState>, key: String, value: String) -> Ap
 /// Ağda görünen, henüz eşleşmemiş cihazlar (PLAN.md §3.2 "Bulunanlar").
 #[tauri::command]
 pub fn discovered_devices(state: State<'_, AppState>) -> Vec<DiscoveredDeviceDto> {
-    state.discovery.list()
+    let devices = state.discovery.list();
+    tracing::debug!(count = devices.len(), "keşfedilen cihazlar istendi");
+    devices
 }
 
 /// Elle adres girerek cihaz ekler (PLAN.md §2.4, §10-K7).
