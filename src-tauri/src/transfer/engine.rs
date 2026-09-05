@@ -401,6 +401,7 @@ pub async fn handle_offer(
 pub async fn receive_stream(
     ctx: TransferContext,
     connection: Connection,
+    peer_id: [u8; 32],
     peer_name: String,
     mut stream: RecvStream,
 ) {
@@ -441,7 +442,12 @@ pub async fn receive_stream(
                 .and_then(|n| n.to_str())
                 .unwrap_or("dosya")
                 .to_string();
-            crate::notifications::file_received(&ctx.app, &peer_name, &name);
+            crate::notifications::file_received(
+                &ctx.app,
+                &data_encoding::BASE32_NOPAD.encode(&peer_id),
+                &peer_name,
+                &name,
+            );
             send_completion(&connection, &transfer_id, true).await;
         }
         Err(err) => {

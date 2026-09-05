@@ -109,7 +109,7 @@ export function ConversationList() {
                         {device.lastMessage ?? "—"}
                       </span>
                       {device.unread > 0 ? (
-                        <span className="shrink-0 rounded-lu-full bg-accent px-1.5 text-[length:var(--lu-text-caption)] leading-[1.4] text-on-accent">
+                        <span className="shrink-0 rounded-full bg-accent px-1.5 text-[length:var(--lu-text-caption)] leading-[1.4] text-on-accent">
                           {device.unread}
                         </span>
                       ) : null}

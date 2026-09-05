@@ -351,8 +351,9 @@ impl ConnectionManager {
                         let ctx = (*self.transfers).clone();
                         let connection = connection.clone();
                         let peer = peer_name.to_string();
+                        let peer_id = device_id;
                         tauri::async_runtime::spawn(engine::receive_stream(
-                            ctx, connection, peer, stream,
+                            ctx, connection, peer_id, peer, stream,
                         ));
                         Ok(true)
                     }

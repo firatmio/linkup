@@ -5,6 +5,12 @@
 //! kullanıcının zaten gördüğü şeyi tekrar etmektir ve hızla rahatsız edici
 //! hâle gelir.
 //!
+//! Bu kural olay anında bakmakla yetmiyor: toast Windows'a teslim edildikten
+//! sonra geri alınamaz, dolayısıyla art arda gelen beş mesaj kullanıcı
+//! uygulamaya döndükten sonra bile sırayla düşmeye devam eder. Bu yüzden
+//! gösterim kısa bir süre geciktirilip o sürede gelenler tek bildirimde
+//! toplanıyor ve odak kararı gecikmenin SONUNDA veriliyor (bkz. `schedule`).
+//!
 //! **Tıklama desteği (Faz 7'de doğrulandı):** Tauri'nin `notification`
 //! eklentisi masaüstünde HİÇBİR olay yayınlamaz — `onAction` ve
 //! `onNotificationReceived` yalnızca mobil içindir. Planın §2.10'da
@@ -14,8 +20,16 @@
 //! yönlendirilebiliyor. Diğer platformlarda eklenti kullanılmaya devam ediyor
 //! (orada tıklama yönlendirmesi henüz yok).
 
+pub mod schedule;
+
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
+use std::time::Instant;
+
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
+
+use schedule::Pending;
 
 /// Bildirime tıklandığında frontend'e gönderilen olay.
 pub const EVENT_ACTIVATED: &str = "notification:activated";
@@ -66,11 +80,110 @@ fn activate(app: &AppHandle, action: &Action) {
     let _ = app.emit(EVENT_ACTIVATED, action);
 }
 
-fn notify(app: &AppHandle, title: &str, body: &str, action: Action) {
+/// Bildirim türü. Konu anahtarının parçası: bir cihazdan gelen mesajlarla o
+/// cihazdan gelen dosyalar ayrı ayrı birikir, birbirini bastırmaz.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum Kind {
+    Message,
+    FileReceived,
+    FileOffer,
+}
+
+impl Kind {
+    /// Birden fazla olay biriktiğinde gösterilecek metin.
+    fn summary(self, device_name: &str, count: u32) -> (String, String) {
+        match self {
+            Kind::Message => (device_name.to_string(), format!("{count} yeni mesaj")),
+            Kind::FileReceived => (
+                format!("{device_name} {count} dosya gönderdi"),
+                String::new(),
+            ),
+            Kind::FileOffer => (
+                format!("{device_name} {count} dosya göndermek istiyor"),
+                String::new(),
+            ),
+        }
+    }
+}
+
+/// Konu bazında biriken bildirim durumu.
+///
+/// Süreç ömrü boyunca yaşar ve tek bir pencereye aittir; bu yüzden yönetilen
+/// bir Tauri durumu yerine modül düzeyinde tutuluyor.
+fn pending_state() -> &'static Mutex<HashMap<(Kind, String), Pending>> {
+    static STATE: OnceLock<Mutex<HashMap<(Kind, String), Pending>>> = OnceLock::new();
+    STATE.get_or_init(Default::default)
+}
+
+/// Bildirimi biriktirir ve zamanı gelince gösterir.
+///
+/// Gösterim ANINDA yapılmaz: kısa bir gecikme boyunca aynı konudan gelen
+/// olaylar tek bildirimde toplanır ve kullanıcı bu arada uygulamaya dönerse
+/// bildirim hiç gösterilmez (bkz. `schedule`).
+fn notify(
+    app: &AppHandle,
+    kind: Kind,
+    // Konu anahtarı cihaz KİMLİĞİ: aynı adı taşıyan iki cihazın bildirimleri
+    // birbirine karışmamalı.
+    key: String,
+    device_name: &str,
+    title: String,
+    body: String,
+    action: Action,
+) {
     if window_has_focus(app) {
         return;
     }
-    show_native(app, title, body, action);
+
+    let delay = {
+        let mut state = match pending_state().lock() {
+            Ok(state) => state,
+            // Kilit zehirlenmişse bildirim göstermemek, panikle çökmekten iyi.
+            Err(err) => {
+                tracing::warn!(error = %err, "bildirim durumu okunamadı");
+                return;
+            }
+        };
+        state
+            .entry((kind, key.clone()))
+            .or_default()
+            .record(Instant::now())
+    };
+
+    let Some(delay) = delay else {
+        // Zaten bekleyen bir gösterim var; bu olay ona eklendi.
+        return;
+    };
+
+    let app = app.clone();
+    let device_name = device_name.to_string();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(delay).await;
+
+        // Karar gecikme SONUNDA veriliyor: kullanıcı bu arada uygulamaya
+        // dönmüş olabilir ve o durumda bildirim hiç gösterilmemeli.
+        let focused = window_has_focus(&app);
+        let count = {
+            let Ok(mut state) = pending_state().lock() else {
+                return;
+            };
+            let Some(pending) = state.get_mut(&(kind, key.clone())) else {
+                return;
+            };
+            pending.take(Instant::now(), !focused)
+        };
+
+        if focused || count == 0 {
+            return;
+        }
+
+        let (title, body) = if count == 1 {
+            (title, body)
+        } else {
+            kind.summary(&device_name, count)
+        };
+        show_native(&app, &title, &body, action);
+    });
 }
 
 #[cfg(windows)]
@@ -127,8 +240,11 @@ fn show_native(app: &AppHandle, title: &str, body: &str, _action: Action) {
 pub fn message_received(app: &AppHandle, device_id: &str, device_name: &str, preview: &str) {
     notify(
         app,
+        Kind::Message,
+        device_id.to_string(),
         device_name,
-        &truncate(preview, 140),
+        device_name.to_string(),
+        truncate(preview, 140),
         Action::OpenChat {
             device_id: device_id.to_string(),
         },
@@ -136,11 +252,14 @@ pub fn message_received(app: &AppHandle, device_id: &str, device_name: &str, pre
 }
 
 /// Dosya alındı.
-pub fn file_received(app: &AppHandle, device_name: &str, file_name: &str) {
+pub fn file_received(app: &AppHandle, device_id: &str, device_name: &str, file_name: &str) {
     notify(
         app,
-        &format!("{device_name} bir dosya gönderdi"),
-        file_name,
+        Kind::FileReceived,
+        device_id.to_string(),
+        device_name,
+        format!("{device_name} bir dosya gönderdi"),
+        file_name.to_string(),
         Action::OpenFiles,
     );
 }
@@ -149,8 +268,11 @@ pub fn file_received(app: &AppHandle, device_name: &str, file_name: &str) {
 pub fn file_offer(app: &AppHandle, device_id: &str, device_name: &str, file_name: &str) {
     notify(
         app,
-        &format!("{device_name} dosya göndermek istiyor"),
-        file_name,
+        Kind::FileOffer,
+        device_id.to_string(),
+        device_name,
+        format!("{device_name} dosya göndermek istiyor"),
+        file_name.to_string(),
         Action::OpenChat {
             device_id: device_id.to_string(),
         },
@@ -194,6 +316,25 @@ mod tests {
 
         assert_eq!(result.chars().count(), 11);
         assert!(result.starts_with("ğüşiöçĞÜŞİ"));
+    }
+
+    /// Biriken bildirimlerin özeti, tek olayın metnini tekrar etmemeli:
+    /// kullanıcı beş mesajın hangisi olduğunu değil, kaç tane olduğunu
+    /// öğrenmek ister.
+    #[test]
+    fn birden_fazla_olay_ozetlenir() {
+        assert_eq!(
+            Kind::Message.summary("FIRAT (B)", 3),
+            ("FIRAT (B)".to_string(), "3 yeni mesaj".to_string())
+        );
+        assert_eq!(
+            Kind::FileReceived.summary("FIRAT (B)", 2).0,
+            "FIRAT (B) 2 dosya gönderdi"
+        );
+        assert_eq!(
+            Kind::FileOffer.summary("FIRAT (B)", 4).0,
+            "FIRAT (B) 4 dosya göndermek istiyor"
+        );
     }
 
     /// Yönlendirme bilgisi frontend'in ayırt edebileceği biçimde gitmeli.

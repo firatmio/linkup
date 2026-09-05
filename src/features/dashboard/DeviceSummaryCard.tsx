@@ -83,7 +83,7 @@ export function DeviceSummaryCard({ device }: { device: TrustedDevice }) {
 
         <div className="flex shrink-0 items-center gap-1">
           {device.unread > 0 ? (
-            <span className="rounded-lu-full bg-accent px-1.5 text-[length:var(--lu-text-caption)] leading-[1.4] text-on-accent">
+            <span className="rounded-full bg-accent px-1.5 text-[length:var(--lu-text-caption)] leading-[1.4] text-on-accent">
               {device.unread}
             </span>
           ) : null}
