@@ -7,7 +7,7 @@ Ayrıntılı mimari, protokol tasarımı ve faz planı için: [PLAN.md](PLAN.md)
 
 ## Durum
 
-**Faz 6 — Ana sayfa tamamlandı.**
+**Faz 7 — Dosya transferi tamamlandı.**
 
 - Faz 0: navigasyon, tema, i18n, loglama, çok-profilli geliştirme kurulumu
 - Faz 1: SQLite şeması + migration altyapısı, kalıcı ayarlar, Ed25519 cihaz
@@ -21,9 +21,11 @@ Ayrıntılı mimari, protokol tasarımı ve faz planı için: [PLAN.md](PLAN.md)
   syntax highlight'lı kod blokları
 - Faz 6: ana sayfada cihaz özet kartları — çevrimiçilik, son mesaj, göreli
   zaman, okunmamış sayısı; karta tıklayınca sohbet açılıyor
+- Faz 7: dosya transferi — sürükle-bırak, ilerleme/hız/kalan süre, blake3
+  bütünlük doğrulaması, kesintide devam, hız limiti, gelen dosyalar geçmişi
 
-Dosya transferi henüz yok. Sohbette görsel önizleme de transferle birlikte
-geliyor (bkz. PLAN.md Faz 7.5).
+Sohbette görsel önizleme ve mesaj listesinin sanallaştırılması sırada
+(bkz. PLAN.md Faz 7.5).
 
 ### Ölçüm
 

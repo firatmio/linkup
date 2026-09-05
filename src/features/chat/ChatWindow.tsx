@@ -1,10 +1,14 @@
-import { useLayoutEffect, useRef, useState } from "react";
-import { Send, MessageSquare, Monitor } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Send, MessageSquare, Monitor, Paperclip } from "lucide-react";
+import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { t } from "../../i18n";
 import { cn } from "../../lib/cn";
 import { Callout } from "../../components/Callout";
 import { MessageBubble } from "./MessageBubble";
 import { useChatStore } from "../../stores/chatStore";
+import { useTransferStore } from "../../stores/transferStore";
+import { TransferRow } from "../transfer/TransferRow";
 import type { ChatMessage, TrustedDevice } from "../../lib/tauri";
 
 /** ``` içeren mesaj kod bloğu sayılır (PLAN.md §3.3). */
@@ -45,8 +49,52 @@ export function ChatWindow({ device }: { device: TrustedDevice }) {
   const error = useChatStore((s) => s.error);
   const send = useChatStore((s) => s.send);
 
+  const [dropActive, setDropActive] = useState(false);
+  const sendFile = useTransferStore((s) => s.send);
+  const activeTransfers = useTransferStore((s) => s.active);
+  const progress = useTransferStore((s) => s.progress);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Bu cihazla olan aktarımlar sohbetin altında görünür.
+  const transfers = activeTransfers.filter((item) => item.deviceId === device.id);
+
+  // Sürükle-bırak (PLAN.md §3.3). Tarayıcının drop olayı Tauri'de dosya YOLU
+  // vermez; yolu yalnızca webview'ın kendi olayı taşır.
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+
+    void getCurrentWebview()
+      .onDragDropEvent((event) => {
+        if (event.payload.type === "over") setDropActive(true);
+        else if (event.payload.type === "leave") setDropActive(false);
+        else if (event.payload.type === "drop") {
+          setDropActive(false);
+          for (const path of event.payload.paths) {
+            void sendFile(device.id, path);
+          }
+        }
+      })
+      .then((fn) => {
+        if (cancelled) fn();
+        else unlisten = fn;
+      });
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [device.id, sendFile]);
+
+  const pickFile = async () => {
+    const selected = await openFileDialog({ multiple: true });
+    if (!selected) return;
+    for (const path of Array.isArray(selected) ? selected : [selected]) {
+      await sendFile(device.id, path);
+    }
+  };
 
   // Yeni mesajda en alta kaydır. Boyama öncesi çalışmalı, yoksa liste bir kare
   // yanlış konumda görünür.
@@ -86,7 +134,12 @@ export function ChatWindow({ device }: { device: TrustedDevice }) {
         </span>
       </header>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto py-4">
+      <div ref={scrollRef} className="relative flex-1 overflow-y-auto py-4">
+        {dropActive ? (
+          <div className="pointer-events-none absolute inset-3 z-10 flex items-center justify-center rounded-lu-lg border-2 border-dashed border-accent bg-accent-subtle text-[length:var(--lu-text-body)] font-semibold text-accent">
+            {t("chats.dropHere")}
+          </div>
+        ) : null}
         {messages.length === 0 ? (
           <p className="px-6 py-10 text-center text-[length:var(--lu-text-body)] text-fg-tertiary">
             {t("chats.noMessages")}
@@ -119,11 +172,32 @@ export function ChatWindow({ device }: { device: TrustedDevice }) {
         )}
       </div>
 
+      {transfers.length > 0 ? (
+        <ul className="shrink-0 border-t border-divider">
+          {transfers.map((transfer) => (
+            <TransferRow
+              key={transfer.transferId}
+              transfer={transfer}
+              progress={progress[transfer.transferId]}
+            />
+          ))}
+        </ul>
+      ) : null}
+
       <div className="shrink-0 space-y-2 px-5 pt-1 pb-4">
         {error ? <Callout tone="warning">{error}</Callout> : null}
 
         {/* Windows 11 deseni: giriş alanı ve gönder düğmesi tek yüzeyde. */}
         <div className="flex items-end gap-1 rounded-lu-lg border border-stroke-strong bg-layer-alt p-1 shadow-[inset_0_-1px_0_var(--lu-stroke-strong)] focus-within:border-accent focus-within:shadow-[inset_0_-2px_0_var(--lu-accent)]">
+          <button
+            type="button"
+            onClick={() => void pickFile()}
+            aria-label={t("chats.attach")}
+            title={t("chats.attach")}
+            className="mb-0.5 flex size-8 shrink-0 items-center justify-center rounded-lu-sm text-fg-secondary transition-colors hover:bg-hover hover:text-fg"
+          >
+            <Paperclip size={16} />
+          </button>
           <textarea
             ref={inputRef}
             value={draft}

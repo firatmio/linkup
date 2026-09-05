@@ -9,6 +9,7 @@ use crate::network::manager::ConnectionManager;
 use crate::network::service::NetworkService;
 use crate::pairing::PairingManager;
 use crate::paths::AppPaths;
+use crate::transfer::engine::SharedContext;
 
 pub struct AppState {
     pub paths: AppPaths,
@@ -18,4 +19,5 @@ pub struct AppState {
     pub discovery: DiscoveryService,
     pub pairing: Arc<PairingManager>,
     pub connections: Arc<ConnectionManager>,
+    pub transfers: SharedContext,
 }

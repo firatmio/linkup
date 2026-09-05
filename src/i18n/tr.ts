@@ -89,6 +89,12 @@ export const tr = {
   "chats.codeToggle": "Kod bloğu olarak gönder",
   "chats.copyCode": "Kopyala",
   "chats.copied": "Kopyalandı",
+  "chats.attach": "Dosya gönder",
+  "chats.dropHere": "Göndermek için bırakın",
+  "transfers.title": "Aktarımlar",
+  "transfers.sending": "Gönderiliyor",
+  "transfers.receiving": "Alınıyor",
+  "transfers.remaining": "{time} kaldı",
 
   // Mesaj durumları
   "message.status.sending": "Gönderiliyor",
@@ -99,6 +105,15 @@ export const tr = {
 
   // Gelen dosyalar
   "files.title": "Gelen Dosyalar",
+  "files.count": "{count} dosya",
+  "files.open": "Aç",
+  "files.reveal": "Klasörde Göster",
+  "files.status.done": "Tamamlandı",
+  "files.status.failed": "Başarısız",
+  "files.status.cancelled": "İptal edildi",
+  "files.status.paused": "Duraklatıldı",
+  "files.status.active": "Aktarılıyor",
+  "files.status.pending": "Bekliyor",
   "files.empty.title": "Henüz dosya alınmadı",
   "files.empty.body": "Aldığınız dosyalar burada geçmişiyle birlikte listelenir.",
 

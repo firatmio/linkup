@@ -54,6 +54,61 @@ pub enum ControlMessage {
     ReadReceipt {
         msg_ids: Vec<String>,
     },
+    /// Dosya gönderme teklifi (PLAN.md §2.7.1).
+    FileOffer(FileOffer),
+    /// Teklif kabul edildi; `start_offset` resume noktasıdır.
+    FileAccept {
+        transfer_id: String,
+        start_offset: u64,
+    },
+    FileReject {
+        transfer_id: String,
+        reason: RejectReason,
+    },
+    /// Transfer akışının ilk çerçevesi. Kontrol akışında değil, dosyaya
+    /// ayrılmış tek yönlü akışın başında gönderilir; ardından ham bayt gelir.
+    TransferStreamHeader {
+        transfer_id: String,
+        offset: u64,
+    },
+    /// Alıcının bütünlük doğrulaması sonucu.
+    FileComplete {
+        transfer_id: String,
+        ok: bool,
+    },
+    /// İki yönlü iptal.
+    TransferCancel {
+        transfer_id: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileOffer {
+    pub transfer_id: String,
+    /// Karşı tarafın bildirdiği ad. GÜVENİLMEZ: kullanılmadan önce
+    /// `transfer::paths::sanitize_file_name`den geçmelidir (PLAN.md §2.13.1).
+    pub name: String,
+    pub size: u64,
+    pub mime: Option<String>,
+    /// Tüm dosyanın blake3 özeti; resume sonrası birleşmenin doğruluğu
+    /// bununla sınanır (PLAN.md §2.7.3).
+    pub hash: [u8; 32],
+    /// Kesilmiş bir transferin devamı mı?
+    pub is_resume: bool,
+}
+
+/// Reddin sebebi. Metin değil kod: karşı taraf kendi dilinde gösterir.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RejectReason {
+    /// Kullanıcı reddetti.
+    Declined,
+    /// Hedef diskte yeterli alan yok (PLAN.md §2.13.2).
+    NoSpace,
+    /// Ayarlardaki boyut eşiğinin üzerinde ve onay alınamadı.
+    TooLarge,
+    /// Dosya adı veya hedef yol kabul edilemez.
+    BadName,
+    Internal,
 }
 
 /// Sohbet mesajı gövdesi.
@@ -338,6 +393,50 @@ mod tests {
         );
         assert_eq!(encode(&ControlMessage::ChatAck { msg_id: "x".into() }), 9);
         assert_eq!(encode(&ControlMessage::ReadReceipt { msg_ids: vec![] }), 10);
+
+        let offer = FileOffer {
+            transfer_id: "t".into(),
+            name: "a.txt".into(),
+            size: 1,
+            mime: None,
+            hash: [0; 32],
+            is_resume: false,
+        };
+        assert_eq!(encode(&ControlMessage::FileOffer(offer)), 11);
+        assert_eq!(
+            encode(&ControlMessage::FileAccept {
+                transfer_id: "t".into(),
+                start_offset: 0
+            }),
+            12
+        );
+        assert_eq!(
+            encode(&ControlMessage::FileReject {
+                transfer_id: "t".into(),
+                reason: RejectReason::Declined
+            }),
+            13
+        );
+        assert_eq!(
+            encode(&ControlMessage::TransferStreamHeader {
+                transfer_id: "t".into(),
+                offset: 0
+            }),
+            14
+        );
+        assert_eq!(
+            encode(&ControlMessage::FileComplete {
+                transfer_id: "t".into(),
+                ok: true
+            }),
+            15
+        );
+        assert_eq!(
+            encode(&ControlMessage::TransferCancel {
+                transfer_id: "t".into()
+            }),
+            16
+        );
     }
 
     #[test]

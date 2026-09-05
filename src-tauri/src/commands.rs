@@ -7,6 +7,7 @@ use tauri::State;
 use crate::db::devices::TrustedDeviceDto;
 use crate::db::messages::{self, Message, MessageStatus};
 use crate::db::settings::{self, Settings};
+use crate::db::transfers::{self, Transfer};
 use crate::discovery::{DiscoveredDeviceDto, DiscoveryService};
 use crate::error::{AppError, AppResult};
 use crate::identity::KeyStorage;
@@ -264,6 +265,73 @@ pub fn mark_conversation_read(state: State<'_, AppState>, id: String) -> AppResu
         );
     }
     Ok(msg_ids.len())
+}
+
+/// Bir cihaza dosya gönderir (PLAN.md §2.7.1).
+///
+/// Teklif gönderilir; karşı taraf kabul ederse veri akışı bağlantı döngüsü
+/// tarafından başlatılır. Cihaz bağlı değilse transfer hiç oluşturulmaz.
+#[tauri::command]
+pub async fn send_file(state: State<'_, AppState>, id: String, path: String) -> AppResult<String> {
+    let device_id = parse_device_id(&id)?;
+    if !state.connections.is_connected(&device_id) {
+        return Err(AppError::Unreachable("cihaz bağlı değil".to_string()));
+    }
+
+    let (transfer_id, offer) =
+        crate::transfer::engine::prepare_offer(&state.transfers, &device_id, path.into()).await?;
+
+    if !state.connections.send_to(&device_id, offer) {
+        return Err(AppError::Unreachable("cihaz bağlı değil".to_string()));
+    }
+    Ok(transfer_id)
+}
+
+/// Alınan dosyaların geçmişi (PLAN.md §3.2 "Gelen Dosyalar").
+#[tauri::command]
+pub fn incoming_files(state: State<'_, AppState>, limit: Option<u32>) -> AppResult<Vec<Transfer>> {
+    let conn = state.db.get().map_err(pool_error)?;
+    transfers::list_incoming(&conn, limit.unwrap_or(500))
+}
+
+/// Sürmekte olan transferler — ilerleme paneli için.
+#[tauri::command]
+pub fn active_transfers(state: State<'_, AppState>) -> AppResult<Vec<Transfer>> {
+    let conn = state.db.get().map_err(pool_error)?;
+    transfers::list_active(&conn)
+}
+
+/// Alınan bir dosyayı işletim sisteminin varsayılan uygulamasıyla açar.
+#[tauri::command]
+pub fn open_transfer_file(state: State<'_, AppState>, transfer_id: String) -> AppResult<()> {
+    let path = transfer_path(&state, &transfer_id)?;
+    tauri_plugin_opener::open_path(path, None::<&str>)
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("dosya açılamadı: {e}")))
+}
+
+/// Dosyayı içinde bulunduğu klasörde gösterir.
+#[tauri::command]
+pub fn reveal_transfer_file(state: State<'_, AppState>, transfer_id: String) -> AppResult<()> {
+    let path = transfer_path(&state, &transfer_id)?;
+    tauri_plugin_opener::reveal_item_in_dir(path)
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("klasör açılamadı: {e}")))
+}
+
+fn transfer_path(state: &State<'_, AppState>, transfer_id: &str) -> AppResult<String> {
+    let conn = state.db.get().map_err(pool_error)?;
+    let record = transfers::get(&conn, transfer_id)?
+        .ok_or_else(|| AppError::InvalidInput("transfer bulunamadı".to_string()))?;
+
+    let path = record
+        .save_path
+        .ok_or_else(|| AppError::InvalidInput("dosya yolu yok".to_string()))?;
+
+    // Kayıt eskiyse dosya taşınmış veya silinmiş olabilir; kullanıcıya
+    // "bulunamadı" demek, boş bir pencere açmaktan iyidir.
+    if !std::path::Path::new(&path).exists() {
+        return Err(AppError::InvalidInput("dosya bulunamadı".to_string()));
+    }
+    Ok(path)
 }
 
 /// Ayarlar → Gelişmiş → "Log klasörünü aç" (PLAN.md §2.14).

@@ -72,24 +72,29 @@ export function SettingRow({
   title,
   description,
   control,
+  children
 }: {
   icon?: ReactNode;
   title: string;
   description?: string;
   control?: ReactNode;
+  children?: ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-4 border-b border-divider px-4 py-3 last:border-b-0">
-      {icon ? <div className="text-fg-secondary">{icon}</div> : null}
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[length:var(--lu-text-body)]">{title}</p>
-        {description ? (
-          <p className="lu-selectable truncate text-[length:var(--lu-text-caption)] text-fg-secondary">
-            {description}
-          </p>
-        ) : null}
+    <div className="last:border-b-0 border-divider border-b">
+      <div className="flex items-center gap-4 px-4 py-3">
+        {icon ? <div className="text-fg-secondary">{icon}</div> : null}
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[length:var(--lu-text-body)]">{title}</p>
+          {description ? (
+            <p className="lu-selectable truncate text-[length:var(--lu-text-caption)] text-fg-secondary">
+              {description}
+            </p>
+          ) : null}
+        </div>
+        {control ? <div className="shrink-0">{control}</div> : null}
       </div>
-      {control ? <div className="shrink-0">{control}</div> : null}
+      {children}
     </div>
   );
 }

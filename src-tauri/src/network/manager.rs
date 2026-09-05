@@ -23,6 +23,7 @@ use crate::db::{devices, DbPool};
 use crate::discovery::registry::Registry;
 use crate::network::protocol::ControlMessage;
 use crate::pairing::{self, PairingManager};
+use crate::transfer::engine::{self, SharedContext};
 
 /// Cihaz zaten çevrimiçiyken gözetmenin ne sıklıkla durumu yoklayacağı.
 /// Bağlantı canlılığı QUIC'in kendi keep-alive'ına bırakılmıştır.
@@ -88,6 +89,7 @@ pub struct ConnectionManager {
     endpoint: Arc<NetworkEndpoint>,
     discovery: Arc<Mutex<Registry>>,
     pairing: Arc<PairingManager>,
+    transfers: SharedContext,
     pub presence: Arc<Presence>,
     /// Bağlı cihazlara mesaj göndermek için kanallar. Bağlantı döngüsü
     /// akışların sahibi olduğundan, dışarıdan gönderim ancak buradan geçer.
@@ -101,6 +103,7 @@ impl ConnectionManager {
         endpoint: Arc<NetworkEndpoint>,
         discovery: Arc<Mutex<Registry>>,
         pairing: Arc<PairingManager>,
+        transfers: SharedContext,
     ) -> Arc<Self> {
         Arc::new(Self {
             app,
@@ -108,6 +111,7 @@ impl ConnectionManager {
             endpoint,
             discovery,
             pairing,
+            transfers,
             presence: Arc::new(Presence::default()),
             outbox: Mutex::new(HashMap::new()),
         })
@@ -312,6 +316,8 @@ impl ConnectionManager {
         mut outgoing: mpsc::Receiver<ControlMessage>,
     ) {
         let mut parts = parts;
+        // Bağlantı klonu, ödünç alma çakışmasına girmeden akış kabul etmek için.
+        let connection = parts.connection.clone();
 
         loop {
             let result = tokio::select! {
@@ -322,6 +328,21 @@ impl ConnectionManager {
                 },
                 frame = read_frame(&mut parts.recv) => match frame {
                     Ok(message) => self.handle_message(&mut parts, device_id, message).await,
+                    Err(err) => {
+                        tracing::info!(peer = %peer_name, error = %err, "bağlantı koptu");
+                        break;
+                    }
+                },
+
+                // Dosya transferleri kontrol akışında değil, dosya başına
+                // açılan tek yönlü akışlarda taşınır (PLAN.md §2.2.3).
+                incoming = connection.accept_uni() => match incoming {
+                    Ok(stream) => {
+                        let ctx = (*self.transfers).clone();
+                        let connection = connection.clone();
+                        tauri::async_runtime::spawn(engine::receive_stream(ctx, connection, stream));
+                        Ok(true)
+                    }
                     Err(err) => {
                         tracing::info!(peer = %peer_name, error = %err, "bağlantı koptu");
                         break;
@@ -401,6 +422,41 @@ impl ConnectionManager {
                     &[msg_id],
                     MessageStatus::Delivered,
                 );
+            }
+
+            ControlMessage::FileOffer(offer) => {
+                let response = engine::handle_offer(&self.transfers, &device_id, &offer);
+                write_frame(&mut parts.send, &response).await?;
+            }
+
+            ControlMessage::FileAccept {
+                transfer_id,
+                start_offset,
+            } => {
+                let ctx = (*self.transfers).clone();
+                let connection = parts.connection.clone();
+                tauri::async_runtime::spawn(engine::send_file(
+                    ctx,
+                    connection,
+                    transfer_id,
+                    start_offset,
+                ));
+            }
+
+            ControlMessage::FileReject {
+                transfer_id,
+                reason,
+            } => {
+                tracing::info!(transfer_id, ?reason, "karşı taraf dosyayı reddetti");
+                engine::mark_rejected(&self.transfers, &transfer_id, reason);
+            }
+
+            ControlMessage::FileComplete { transfer_id, ok } => {
+                engine::mark_sender_complete(&self.transfers, &transfer_id, ok);
+            }
+
+            ControlMessage::TransferCancel { transfer_id } => {
+                engine::mark_cancelled(&self.transfers, &transfer_id);
             }
 
             ControlMessage::ReadReceipt { msg_ids } => {

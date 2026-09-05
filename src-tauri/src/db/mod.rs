@@ -8,6 +8,7 @@ pub mod devices;
 pub mod messages;
 pub mod migrations;
 pub mod settings;
+pub mod transfers;
 
 use std::path::Path;
 

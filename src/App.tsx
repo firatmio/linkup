@@ -10,6 +10,7 @@ import { useAppStore } from "./stores/appStore";
 import { subscribeToDiscovery, useDeviceStore } from "./stores/deviceStore";
 import { subscribeToPairing, usePairingStore } from "./stores/pairingStore";
 import { subscribeToChat } from "./stores/chatStore";
+import { subscribeToTransfers, useTransferStore } from "./stores/transferStore";
 
 export default function App() {
   const loadAppInfo = useAppStore((s) => s.load);
@@ -30,6 +31,11 @@ export default function App() {
   useEffect(() => void loadTrusted(), [loadTrusted]);
   useEffect(() => subscribeToPairing(), []);
   useEffect(() => subscribeToChat(), []);
+
+  // Dosya aktarımları.
+  const loadTransfers = useTransferStore((s) => s.load);
+  useEffect(() => void loadTransfers(), [loadTransfers]);
+  useEffect(() => subscribeToTransfers(), []);
 
   return (
     // Masaüstü uygulaması dosya protokolünden servis edildiği için HashRouter.

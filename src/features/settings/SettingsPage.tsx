@@ -77,24 +77,25 @@ export function SettingsPage() {
               icon={<Fingerprint size={18} />}
               title={t("settings.fingerprint")}
               description={t("settings.fingerprint.desc")}
-            />
-            {identity ? (
-              <div className="px-4 pb-4">
-                <code className="lu-selectable block rounded-lu-sm border border-stroke bg-layer-alt px-3 py-2 font-mono text-[length:var(--lu-text-caption)] leading-relaxed break-all">
-                  {identity.fingerprint}
-                </code>
-              </div>
-            ) : null}
+            >
+              {identity ? (
+                <div className="px-4 pb-4">
+                  <code className="lu-selectable block rounded-lu-sm border border-stroke bg-layer-alt px-3 py-2 font-mono text-[length:var(--lu-text-caption)] leading-relaxed break-all">
+                    {identity.fingerprint}
+                  </code>
+                </div>
+              ) : null}
+            </SettingRow>
             <SettingRow
               icon={<KeyRound size={18} />}
               title={t("settings.keyStorage")}
               description={
                 identity
                   ? t(
-                      identity.storage === "osKeychain"
-                        ? "settings.keyStorage.osKeychain"
-                        : "settings.keyStorage.plainFile",
-                    )
+                    identity.storage === "osKeychain"
+                      ? "settings.keyStorage.osKeychain"
+                      : "settings.keyStorage.plainFile",
+                  )
                   : t("common.loading")
               }
             />

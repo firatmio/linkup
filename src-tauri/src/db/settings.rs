@@ -15,6 +15,13 @@ use crate::error::{AppError, AppResult};
 const DEFAULTS: &[(&str, &str)] = &[
     ("theme", "system"), // system | light | dark
     ("deviceName", ""),  // boş = makine adı kullanılır
+    // Dosya transferi (PLAN.md §2.7.4, §2.13.3)
+    ("downloadDir", ""), // boş = İndirilenler/LinkUp
+    // trusted | threshold | always  (PLAN.md §2.13.3)
+    ("acceptPolicy", "trusted"),
+    ("acceptSizeThreshold", "104857600"), // 100 MB
+    ("maxConcurrentTransfers", "3"),
+    ("speedLimitBytes", "0"), // 0 = sınırsız
 ];
 
 /// Frontend'e giden ayar anlık görüntüsü.
@@ -23,6 +30,11 @@ const DEFAULTS: &[(&str, &str)] = &[
 pub struct Settings {
     pub theme: String,
     pub device_name: String,
+    pub download_dir: String,
+    pub accept_policy: String,
+    pub accept_size_threshold: u64,
+    pub max_concurrent_transfers: u32,
+    pub speed_limit_bytes: u64,
 }
 
 pub fn is_known_key(key: &str) -> bool {
@@ -64,11 +76,33 @@ pub fn set(conn: &Connection, key: &str, value: &str) -> AppResult<()> {
     Ok(())
 }
 
+/// Sayısal ayarı okur; bozuk bir değer varsayılana düşer.
+///
+/// Kullanıcı ayar dosyasını elle bozmuş olabilir; sayı bekleyen bir alanda
+/// çöp bulmak uygulamanın açılmamasına yol açmamalı.
+fn parse_or_default<T: std::str::FromStr>(conn: &Connection, key: &str) -> AppResult<T>
+where
+    T::Err: std::fmt::Debug,
+{
+    let raw = get(conn, key)?;
+    Ok(raw.parse().unwrap_or_else(|_| {
+        tracing::warn!(key, value = %raw, "ayar sayıya çevrilemedi, varsayılana düşülüyor");
+        default_for(key)
+            .parse()
+            .expect("varsayılan ayar geçerli olmalı")
+    }))
+}
+
 /// Tüm ayarları tek seferde okur (uygulama açılışında bir kez).
 pub fn load(conn: &Connection) -> AppResult<Settings> {
     Ok(Settings {
         theme: get(conn, "theme")?,
         device_name: get(conn, "deviceName")?,
+        download_dir: get(conn, "downloadDir")?,
+        accept_policy: get(conn, "acceptPolicy")?,
+        accept_size_threshold: parse_or_default(conn, "acceptSizeThreshold")?,
+        max_concurrent_transfers: parse_or_default(conn, "maxConcurrentTransfers")?,
+        speed_limit_bytes: parse_or_default(conn, "speedLimitBytes")?,
     })
 }
 

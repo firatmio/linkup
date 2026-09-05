@@ -26,3 +26,38 @@ export function relativeTime(seconds: number | null): string {
     month: "short",
   });
 }
+
+const UNITS = ["B", "KB", "MB", "GB", "TB"];
+
+/** 1536 → "1,5 KB" */
+export function fileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < UNITS.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  // Büyük değerlerde ondalık gürültüdür: "1,5 GB" ama "512 MB".
+  const digits = value >= 100 ? 0 : 1;
+  return `${value.toFixed(digits).replace(".", ",")} ${UNITS[unit]}`;
+}
+
+/** Saniyedeki bayt → "12,4 MB/s" */
+export function speed(bytesPerSecond: number): string {
+  return `${fileSize(bytesPerSecond)}/s`;
+}
+
+/**
+ * Kalan süre. Hız sıfırsa tahmin yapılmaz — "sonsuz" göstermek yerine
+ * hiçbir şey göstermek daha dürüst.
+ */
+export function remainingTime(bytesLeft: number, bytesPerSecond: number): string | null {
+  if (bytesPerSecond <= 0) return null;
+
+  const seconds = Math.ceil(bytesLeft / bytesPerSecond);
+  if (seconds < 60) return `${seconds} sn`;
+  if (seconds < HOUR) return `${Math.ceil(seconds / MINUTE)} dk`;
+  return `${Math.round((seconds / HOUR) * 10) / 10} sa`.replace(".", ",");
+}

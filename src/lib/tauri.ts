@@ -110,6 +110,30 @@ export interface PairingFinished {
   reason: string | null;
 }
 
+
+/** Dosya transferi kaydı (PLAN.md §2.7). */
+export interface Transfer {
+  transferId: string;
+  deviceId: string;
+  direction: "in" | "out";
+  fileName: string;
+  fileSize: number;
+  mime: string | null;
+  savePath: string | null;
+  bytesDone: number;
+  status: "pending" | "active" | "paused" | "done" | "failed" | "cancelled";
+  error: string | null;
+  startedAt: number;
+  completedAt: number | null;
+}
+
+export interface TransferProgress {
+  transferId: string;
+  bytesDone: number;
+  total: number;
+  bytesPerSecond: number;
+}
+
 /** Backend'in yayınladığı olaylar. */
 export const events = {
   discoveryChanged: "discovery:changed",
@@ -119,7 +143,19 @@ export const events = {
   pairingFinished: "pairing:finished",
   chatMessage: "chat:message",
   chatStatus: "chat:status",
+  transferProgress: "transfer:progress",
+  transferChanged: "transfer:changed",
 } as const;
+
+export function onTransferProgress(
+  handler: (event: TransferProgress) => void,
+): Promise<UnlistenFn> {
+  return listen<TransferProgress>(events.transferProgress, (e) => handler(e.payload));
+}
+
+export function onTransferChanged(handler: () => void): Promise<UnlistenFn> {
+  return listen(events.transferChanged, () => handler());
+}
 
 export function onChatMessage(
   handler: (event: IncomingMessageEvent) => void,
@@ -185,5 +221,12 @@ export const api = {
     invoke<ChatMessage>("send_message", { id, body, isCode }),
   markConversationRead: (id: string) =>
     invoke<number>("mark_conversation_read", { id }),
+  sendFile: (id: string, path: string) => invoke<string>("send_file", { id, path }),
+  incomingFiles: (limit?: number) => invoke<Transfer[]>("incoming_files", { limit }),
+  activeTransfers: () => invoke<Transfer[]>("active_transfers"),
+  openTransferFile: (transferId: string) =>
+    invoke<void>("open_transfer_file", { transferId }),
+  revealTransferFile: (transferId: string) =>
+    invoke<void>("reveal_transfer_file", { transferId }),
   openLogDir: () => invoke<void>("open_log_dir"),
 };

@@ -10,6 +10,7 @@ mod network;
 mod pairing;
 mod paths;
 mod state;
+mod transfer;
 
 use cli::Cli;
 use paths::AppPaths;
@@ -48,6 +49,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(move |app| {
             use tauri::Manager;
 
@@ -63,6 +65,13 @@ pub fn run() {
                 if let Ok(count) = db::messages::fail_stuck_outgoing(&conn) {
                     if count > 0 {
                         tracing::info!(count, "yolda kalmış mesajlar başarısız işaretlendi");
+                    }
+                }
+                // Yarım kalan transferler duraklatılmış sayılır: `.part`
+                // dosyaları durduğu için devam ettirilebilirler.
+                if let Ok(count) = db::transfers::pause_stuck(&conn) {
+                    if count > 0 {
+                        tracing::info!(count, "yarım kalan transferler duraklatıldı");
                     }
                 }
             }
@@ -91,12 +100,19 @@ pub fn run() {
                 db.clone(),
             ));
 
+            let transfers = std::sync::Arc::new(transfer::engine::TransferContext {
+                db: db.clone(),
+                app: app.handle().clone(),
+                default_download_dir: paths.downloads_dir.clone(),
+            });
+
             let connections = network::manager::ConnectionManager::new(
                 app.handle().clone(),
                 db.clone(),
                 network.endpoint(),
                 discovery.registry(),
                 std::sync::Arc::clone(&pairing),
+                std::sync::Arc::clone(&transfers),
             );
             connections.start();
 
@@ -115,6 +131,7 @@ pub fn run() {
                 discovery,
                 pairing,
                 connections,
+                transfers,
             });
             Ok(())
         })
@@ -132,6 +149,11 @@ pub fn run() {
             commands::chat_history,
             commands::send_message,
             commands::mark_conversation_read,
+            commands::send_file,
+            commands::incoming_files,
+            commands::active_transfers,
+            commands::open_transfer_file,
+            commands::reveal_transfer_file,
             commands::set_setting,
             commands::open_log_dir
         ])

@@ -18,6 +18,9 @@ pub enum AppError {
     #[error("veritabanı: {0}")]
     Db(#[from] rusqlite::Error),
 
+    #[error("akışa yazılamadı: {0}")]
+    QuicWrite(#[from] quinn::WriteError),
+
     #[error("ayar bulunamadı: {0}")]
     SettingNotFound(String),
 
@@ -44,6 +47,7 @@ impl AppError {
         match self {
             AppError::Io(_) => "error.io",
             AppError::Db(_) => "error.db",
+            AppError::QuicWrite(_) => "error.io",
             AppError::SettingNotFound(_) => "error.settingNotFound",
             AppError::InvalidInput(_) => "error.invalidInput",
             AppError::InvalidAddress(_) => "error.invalidAddress",
