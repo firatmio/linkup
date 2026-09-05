@@ -443,7 +443,9 @@ Ana giriş noktası **Dashboard**'dur, chat değil. Sol sidebar sabit navigasyon
 ```
 
 **Sidebar bölümleri:**
-- **Ana Sayfa:** cihaz özet kartları (son mesaj, online durumu, zaman) · aktif transfer özeti · son gelen medyalar şeridi
+- **Ana Sayfa:** cihaz özet kartları (son mesaj, online durumu, göreli zaman, okunmamış sayısı; kart tıklanınca o sohbet açılır) · aktif transfer özeti (Faz 7) · son gelen medyalar şeridi (Faz 8)
+
+  > Not: "Aktif Transferler" ve "Son Gelen Medyalar" başlıkları, gösterecekleri veri var olduğunda ekleniyor. Boş bir başlık göstermek ekranı doldurmaktan başka işe yaramaz.
 - **Sohbetler:** eşleşmiş cihaz listesi → chat ekranı
 - **Gelen Dosyalar:** tüm alınan dosyaların geçmişi, filtre (cihaz / tip: medya·döküman·arşiv) + arama
 - **Ayarlar:** §3.4
@@ -607,7 +609,7 @@ Her fazın sonunda **çalışan ve elle doğrulanabilir** bir çıktı vardır.
 | **3 — Keşif** | mDNS yayın + keşif · "Bulunanlar" listesi · manuel IP ile ekleme · adres sıralama | İki instance birbirini otomatik buluyor; mDNS kapalıyken manuel ekleme çalışıyor |
 | **4 — Pairing** | SAS hesaplama (channel binding) · iki taraflı onay dialogu · `trusted_devices` kaydı · son bilinen IP ile yeniden bağlanma (backoff denetleyicisi) · pinlenmiş key ile otomatik doğrulama · "Unut" | Eşleştirme tamamlanıyor; uygulama yeniden başlatılınca kod sormadan bağlanıyor |
 | **5 — Chat** | `ChatMessage`/`ChatAck`/`ReadReceipt` · mesaj persist · sohbet UI · kod bloğu · durum göstergesi | İki instance arasında mesajlaşma ve "Görüldü" çalışıyor, geçmiş kalıcı |
-| **6 — Dashboard** | Cihaz özet kartları gerçek verilerle · online durumu · son mesaj · boş durumlar | Açılış ekranı anlamlı veri gösteriyor |
+| **6 — Dashboard** | Cihaz özet kartları gerçek verilerle · online durumu · son mesaj + göreli zaman · okunmamış sayısı · karttan sohbete geçiş · boş durumlar | Açılış ekranı anlamlı veri gösteriyor |
 | **7 — Dosya transferi + resume** | `FileOffer`/`FileAccept` · stream akışı · **dosya adı sanitizasyonu** · disk alanı kontrolü · kabul politikası · progress UI · resume · kuyruk · hız limiti · çoklu dosya | Büyük dosya transfer ediliyor; ağ kesilip geri gelince kaldığı yerden devam ediyor; kötü niyetli dosya adları reddediliyor |
 | **7.5 — Sohbette medya** | Görsel önizleme · mesaj listesinin sanallaştırılması + geçmişe kaydırma | Gönderilen görsel sohbette küçük resim olarak görünüyor; uzun geçmiş akıcı kayıyor |
 | **8 — Gelen Dosyalar + Bildirim + Tray** | Dosya geçmişi + filtre/arama · dosya bilgi modalı · son medyalar şeridi · native bildirim (**önce tıklama event'i doğrulanır**) · tray · single-instance · autostart · global kısayol + hızlı gönder popup | Uygulama tray'de yaşıyor; bildirim geliyor ve tıklayınca doğru ekran açılıyor |

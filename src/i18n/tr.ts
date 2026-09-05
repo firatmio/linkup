@@ -67,6 +67,11 @@ export const tr = {
   "dashboard.empty.body":
     "Aynı ağdaki bir cihazla eşleşerek mesajlaşmaya ve dosya göndermeye başlayın.",
   "dashboard.empty.action": "Cihaz Ekle",
+  "dashboard.empty.discovered":
+    "Ağda {count} cihaz bulundu. Sol alttaki listeden eşleştirebilirsiniz.",
+  "dashboard.summary.online": "{online} / {total} cihaz çevrimiçi",
+  "dashboard.summary.unread": "{count} okunmamış mesaj",
+  "dashboard.openChat": "Sohbeti aç",
 
   // Sohbetler
   "chats.title": "Sohbetler",

@@ -7,7 +7,7 @@ Ayrıntılı mimari, protokol tasarımı ve faz planı için: [PLAN.md](PLAN.md)
 
 ## Durum
 
-**Faz 5 — Sohbet tamamlandı.**
+**Faz 6 — Ana sayfa tamamlandı.**
 
 - Faz 0: navigasyon, tema, i18n, loglama, çok-profilli geliştirme kurulumu
 - Faz 1: SQLite şeması + migration altyapısı, kalıcı ayarlar, Ed25519 cihaz
@@ -19,6 +19,8 @@ Ayrıntılı mimari, protokol tasarımı ve faz planı için: [PLAN.md](PLAN.md)
   pinlenmiş anahtarla otomatik yeniden bağlanma, "Cihazı Unut"
 - Faz 5: metin mesajlaşma, kalıcı geçmiş, iletildi/görüldü göstergesi,
   syntax highlight'lı kod blokları
+- Faz 6: ana sayfada cihaz özet kartları — çevrimiçilik, son mesaj, göreli
+  zaman, okunmamış sayısı; karta tıklayınca sohbet açılıyor
 
 Dosya transferi henüz yok. Sohbette görsel önizleme de transferle birlikte
 geliyor (bkz. PLAN.md Faz 7.5).
