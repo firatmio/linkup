@@ -7,7 +7,7 @@ Ayrıntılı mimari, protokol tasarımı ve faz planı için: [PLAN.md](PLAN.md)
 
 ## Durum
 
-**Faz 7.5 — Sohbette medya tamamlandı.**
+**Faz 8 — Gelen Dosyalar + Tepsi tamamlandı.**
 
 - Faz 0: navigasyon, tema, i18n, loglama, çok-profilli geliştirme kurulumu
 - Faz 1: SQLite şeması + migration altyapısı, kalıcı ayarlar, Ed25519 cihaz
@@ -27,9 +27,12 @@ Ayrıntılı mimari, protokol tasarımı ve faz planı için: [PLAN.md](PLAN.md)
   ilgili ekran açılıyor (Windows)
 - Faz 7.5: aktarımlar sohbet akışında kendi baloncuğunda, görsel önizleme +
   tam ekran görüntüleyici, sanallaştırılmış mesaj listesi ve geçmişe kaydırma
+- Faz 8: gelen dosyalarda arama + tür filtresi + dosya bilgi kartı, ana sayfada
+  son medyalar şeridi, sistem tepsisi, tepsiye küçülerek kapanma, tek instance,
+  Windows açılışında başlatma, global kısayol + hızlı gönder penceresi
 
-Sırada Faz 8 var: gelen dosyalar ekranının tamamlanması, sistem tepsisi ve
-tek-instance yaşam döngüsü (bkz. PLAN.md §7).
+Sırada Faz 9 var: FTS5 ile sohbet araması ve pano dosya spike'ı
+(bkz. PLAN.md §7).
 
 ### Ölçüm
 
