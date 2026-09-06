@@ -16,6 +16,7 @@ import { subscribeToPairing, usePairingStore } from "./stores/pairingStore";
 import { subscribeToChat } from "./stores/chatStore";
 import { subscribeToTransfers, useTransferStore } from "./stores/transferStore";
 import { useNotificationRouting } from "./features/notifications/useNotificationRouting";
+import { disableWebViewInteractions } from "./disabled";
 
 /** Router bağlamı gerektirdiği için ayrı bileşen. */
 function NotificationRouting() {
@@ -24,6 +25,7 @@ function NotificationRouting() {
 }
 
 export default function App() {
+  disableWebViewInteractions();
   const loadAppInfo = useAppStore((s) => s.load);
   const hydrateTheme = useUiStore((s) => s.hydrate);
 
