@@ -21,6 +21,9 @@ import process from "node:process";
 const root = resolve(import.meta.dirname, "..");
 const KEY_PATH = join(root, ".tauri", "linkup-updater.key");
 
+const key = fs.readFileSync(KEY_PATH, "utf8").trim();
+process.key.TAURI_SIGNING_PRIVATE_KEY = key;
+
 function fail(message) {
   console.error(`\x1b[1;31m✖ ${message}\x1b[0m`);
   process.exit(1);
